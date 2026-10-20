@@ -33,6 +33,8 @@ eim select v5.5.6
 
 ターゲットは `sdkconfig.defaults` で esp32s3 に設定済みのため、`idf.py set-target` は不要です。
 
+書き込みは、側面の電源スイッチを OFF にした状態で、USB-C ケーブルで PC に接続して行います。
+
 ```sh
 eim run "idf.py build"
 eim run "idf.py flash monitor"
