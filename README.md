@@ -6,18 +6,25 @@ M5Stack Cardputer-Adv（ESP32-S3）向けの ESP-IDF プロジェクトです。
 
 ## 環境の準備
 
-ESP-IDF は EIM でインストールし、使うバージョンを選択します。
-v5.5.6 がインストール済みの場合は、`eim install` は不要です。
-
-```sh
-eim install -i v5.5.6
-eim select v5.5.6
-```
+ESP-IDF は、ESP-IDF Installation Manager（EIM）でインストールし、使うバージョンを選択します。
+EIM の詳細は[公式ドキュメント](https://docs.espressif.com/projects/idf-im-ui/en/latest/)を参照してください。
 
 インストール済みのバージョンと、選択中のバージョンは次のコマンドで確認できます。
 
 ```sh
 eim list
+```
+
+v5.5.6 がインストール済みの場合は、次の `eim install` は不要です。
+
+```sh
+eim install -i v5.5.6
+```
+
+使うバージョンを選択します。
+
+```sh
+eim select v5.5.6
 ```
 
 ## ビルド・書き込み・モニタ
