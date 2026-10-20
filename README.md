@@ -31,6 +31,8 @@ eim select v5.5.6
 
 ## ビルド・書き込み・モニタ
 
+ターゲットは `sdkconfig.defaults` で esp32s3 に設定済みのため、`idf.py set-target` は不要です。
+
 ```sh
 eim run "idf.py build"
 eim run "idf.py flash monitor"
