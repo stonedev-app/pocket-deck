@@ -69,6 +69,8 @@ canvas.drawString("hello", 0, 0);
 canvas.pushSprite(0, 0);
 ```
 
+- `M5.begin()` 直後の既定の向きは、`width()` = 240、`height()` = 135（横長）。実機で確認済み。
+- `M5.Display.println`、`setCursor`、`printf` による文字表示は、実機で動作を確認した。
 - UserDemo の起動時は、`setBrightness(0)` で一度消灯してから描画を準備している。
 - 日本語表示（フォント選択）は未確認。M5GFX の内蔵フォントに日本語があるはずだが、調べていない。
 
@@ -275,13 +277,12 @@ ir_helper_send(addr, cmd);         // NEC フレームを 1 回送る（ルー�
 
 ## 9. 実装前に確認が必要な項目
 
-1. ディスプレイの向き。解像度は 240×135 だが、M5GFX の既定の回転で `width()` が 240 になるかは未確認（実機のログで確認）。
-2. IMU のチップ型番（`M5.Imu.getType()` をログに出す）と、加速度・角速度の単位と軸の向き。
-3. M5Unified / M5GFX を IDF v5.5.6 のプロジェクトにどう組み込むか（git clone、サブモジュール、または Component Manager）。UserDemo は IDF v5.4.2 で、v5.5.6 でビルドできるかも未確認。
-4. `record()` が非ブロッキングかどうかの実機確認。
-5. キーボード用の TCA8418 ドライバを、UserDemo からコピーするか、M5Unified の I2C ラッパー（`m5::I2C_Device`）を使って自作するか。UserDemo のドライバは `M5.In_I2C` 上に作られている。`M5Cardputer` ライブラリの Adv 対応も未確認。
-6. 日本語フォントの扱い。
-7. 赤外線の受信ハードの有無と、GPIO44 とコンソール（UART0）の競合。
+1. IMU のチップ型番（`M5.Imu.getType()` をログに出す）と、加速度・角速度の単位と軸の向き。
+2. M5Unified / M5GFX を IDF v5.5.6 のプロジェクトにどう組み込むか（git clone、サブモジュール、または Component Manager）。UserDemo は IDF v5.4.2 で、v5.5.6 でビルドできるかも未確認。
+3. `record()` が非ブロッキングかどうかの実機確認。
+4. キーボード用の TCA8418 ドライバを、UserDemo からコピーするか、M5Unified の I2C ラッパー（`m5::I2C_Device`）を使って自作するか。UserDemo のドライバは `M5.In_I2C` 上に作られている。`M5Cardputer` ライブラリの Adv 対応も未確認。
+5. 日本語フォントの扱い。
+6. 赤外線の受信ハードの有無と、GPIO44 とコンソール（UART0）の競合。
 
 ## 10. 参照先
 
