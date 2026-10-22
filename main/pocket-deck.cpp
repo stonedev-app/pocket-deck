@@ -4,7 +4,7 @@
 
 static const char *TAG = "pocket-deck";
 
-void app_main(void)
+extern "C" void app_main(void)
 {
     uint32_t count = 0;
 
