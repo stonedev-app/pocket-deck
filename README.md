@@ -4,7 +4,7 @@ M5Stack Cardputer-Adv（ESP32-S3）向けの ESP-IDF プロジェクトです。
 音楽再生や Podcast などの音声再生アプリを、複数切り替えて動かすことを目指しています。
 キー操作は vim 風にする予定です。
 
-現在は設計検討の段階で、動作確認用のサンプルコード（1秒ごとにカウントをログ出力するだけ）のみです。
+現在は設計検討の段階で、動作確認用のサンプルコード（画面とログに、1秒ごとのカウントを出力するだけ）のみです。
 
 ## 環境の準備
 
@@ -29,6 +29,11 @@ eim install -i v5.5.6
 eim select v5.5.6
 ```
 
+## 依存ライブラリ
+
+[M5Unified](https://github.com/m5stack/M5Unified)（ディスプレイ描画の M5GFX も依存として含まれます）を使っています。
+`main/idf_component.yml` に記載があり、初回の `idf.py build` で `managed_components/` に自動でダウンロードされます。ダウンロードにはネットワーク接続が必要です。
+
 ## ビルド・書き込み・モニタ
 
 ターゲットは `sdkconfig.defaults` で esp32s3 に設定済みのため、`idf.py set-target` は不要です。
@@ -41,3 +46,7 @@ eim run "idf.py flash monitor"
 ```
 
 モニタの終了は `Ctrl+]`。
+
+## ドキュメント
+
+- [Cardputer-Adv 周辺機器の使い方](docs/cardputer-adv-peripherals.md): ディスプレイ・キーボード・IMU・スピーカー・マイク・赤外線送信を使うための情報
