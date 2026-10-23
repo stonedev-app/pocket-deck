@@ -1,6 +1,6 @@
 # Cardputer-Adv 周辺機器の使い方
 
-M5Stack Cardputer-Adv（ESP32-S3）で、ディスプレイ・キーボード・IMU・スピーカー・マイク・赤外線送信を使うコードを書くための情報をまとめる。
+M5Stack Cardputer-Adv（ESP32-S3）で、ディスプレイ・キーボード・IMU・スピーカー・マイク・赤外線送信・SD カードを使うコードを書くための情報をまとめる。
 
 ## 0. このドキュメントの前提と信頼度
 
@@ -36,7 +36,8 @@ M5Stack Cardputer-Adv（ESP32-S3）で、ディスプレイ・キーボード・
 | マイク | I2S（BCK=GPIO41、WS=GPIO43、DATA_IN=GPIO46）、コーデック ES8311 | 確認済み |
 | 赤外線送信 | GPIO44（RMT、38kHz キャリア） | 確認済み。受信ハードの有無は未確認 |
 | ボタン | GPIO0（`M5.BtnA` 相当） | 確認済み（M5Unified のソース） |
-| SD カード / SPI | SCLK=40、MOSI=14、MISO=39、CS=12 | 確認済み（本資料の対象外） |
+| SD カード / SPI | SCLK=40、MOSI=14、MISO=39、CS=12 | 確認済み（9 章） |
+| メモリ | ESP32-S3FN8（フラッシュ 8MB、内蔵 SRAM 512KB）。PSRAM なし | 構成は[公式の製品ページ](https://docs.m5stack.com/en/products/sku/K132-Adv)の記載。PSRAM なしは、UserDemo の `sdkconfig.defaults` にフラッシュ 8MB の設定だけがあり SPIRAM の設定がないことと、製品ページに PSRAM の記載がないことからの判断で、データシートは未確認 |
 
 ピン番号の出典は UserDemo の `main/hal/hal_config.h` と M5Unified の `src/M5Unified.cpp`。
 
@@ -223,6 +224,27 @@ while (M5.Speaker.isPlaying()) { M5.delay(1); }
 - `tone(frequency, duration = UINT32_MAX, channel = -1, stop_current_sound = true)` は、`duration` を省略すると鳴り続ける。止めるには `M5.Speaker.stop()`（全チャンネル）または `stop(channel)` を使う。どちらもヘッダで存在を確認した。
 - **マイクとスピーカーは同時に使えない**（次の 7 章を参照）。
 
+### 6.1 長い音声のチャンク再生
+
+SD カード上の WAV のように、メモリに収まらない音声は、小さなバッファに分けて `playRaw` で順に渡す。PSRAM がないので（2 章）、バッファは内部 SRAM に取る。以下は M5Unified のヘッダの記述（`Speaker_Class.hpp`）を元に書いた例で、**ビルドも実機確認もしていない**。
+
+```cpp
+static int16_t buf[3][2048];                 // 要素数。3 個を順番に使う
+int i = 0;
+size_t n;
+while ((n = fread(buf[i], sizeof(int16_t), 2048, fp)) > 0) {
+    M5.Speaker.playRaw(buf[i], n, sample_rate, false, 1, 0);   // channel=0 を明示
+    i = (i + 1) % 3;
+}
+while (M5.Speaker.isPlaying(0)) { M5.delay(1); }
+```
+
+- バッファの回し方はヘッダの `@attention` に従う。コールバックなしなら 3 個を順番に使う。`setBufferReleaseCallback()` で「再生側が読み終えた」通知を受けるなら、通知後に次を埋める前提で 2 個の交互利用でよい。
+- チャンネルを明示すると、キューに空きがないとき、通常のタスクは空きが出るまで待つ（ヘッダの `@return` の説明）。上の例はこれに頼ってループを組んだ。この待ちの挙動は未確認。
+- `isPlaying(uint8_t channel)` は 0〜7 のチャンネル番号を明示する形で、戻り値は 0=再生していない、1=再生中でキューに空きあり、2=再生中でキューに空きなし。チャンネル省略（自動選択）では使えないので、`isPlaying()` で全体の再生状態を見るか、チャンネルを明示する。
+- WAV のヘッダ（`fmt ` チャンクのサンプルレート・チャンネル数・ビット幅、`data` チャンクの位置）は、自前で読む必要がある。M5Unified に、ファイルから読むための WAV パーサは見当たらない（`playWav` はメモリ上の全データを渡す方式）。ステレオは `playRaw` の `stereo` 引数で指定するが、左右のサンプルの並び方の仕様は未確認。
+- 適切なバッファ長と個数は未確認。音切れが出たら、チャンクを大きくするか個数を増やす。
+
 ## 7. マイク
 
 M5Unified の `M5.Mic`（`m5::Mic_Class`）を使う。スピーカーと同じ I2S ピンとコーデックを共有するため、**使う前にスピーカーを止める**。UserDemo の録音アプリ（`main/apps/app_record/app_record.cpp`）は次の順に切り替えている。
@@ -275,7 +297,47 @@ ir_helper_send(addr, cmd);         // NEC フレームを 1 回送る（ルー�
 - 受信用のハードが搭載されているかは未確認。
 - GPIO44 は ESP32-S3 の UART0 の RX としても使われることがある。本プロジェクトのコンソール設定（`sdkconfig.defaults`）と競合しないかは未確認。
 
-## 9. 実装前に確認が必要な項目
+## 9. SD カード
+
+M5Unified に SD カードの機能はなく、UserDemo は ESP-IDF の API（SPI モードの SD ホストと FAT）を直接使っている。出典は `main/hal/hal.cpp` の `Hal::spi_init()` と `Hal::sd_card_init()`で、コメントによれば ESP-IDF v5.3.3 の `storage/sd_card/sdspi` サンプルが元。
+
+```cpp
+#include <driver/spi_master.h>
+#include <driver/sdspi_host.h>
+#include <sdmmc_cmd.h>
+#include <esp_vfs_fat.h>
+
+sdmmc_host_t host = SDSPI_HOST_DEFAULT();
+
+// 1. SPI バスの初期化（一度だけ）
+spi_bus_config_t bus_cfg = {
+    .mosi_io_num   = GPIO_NUM_14,
+    .miso_io_num   = GPIO_NUM_39,
+    .sclk_io_num   = GPIO_NUM_40,
+    .quadwp_io_num = -1,
+    .quadhd_io_num = -1,
+    .max_transfer_sz = 4000,
+};
+spi_bus_initialize((spi_host_device_t)host.slot, &bus_cfg, SDSPI_DEFAULT_DMA);
+
+// 2. SD カードのマウント
+esp_vfs_fat_sdmmc_mount_config_t mount_config = {
+    .format_if_mount_failed = false, .max_files = 5, .allocation_unit_size = 16 * 1024,
+    .disk_status_check_enable = false, .use_one_fat = false};
+sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
+slot_config.gpio_cs  = GPIO_NUM_12;
+slot_config.host_id  = (spi_host_device_t)host.slot;
+
+sdmmc_card_t* card = nullptr;
+esp_err_t ret = esp_vfs_fat_sdspi_mount("/sdcard", &host, &slot_config, &mount_config, &card);
+```
+
+- マウント後は `fopen("/sdcard/...")` などの標準のファイル API で読み書きできる。
+- 失敗したとき、`ESP_FAIL` はファイルシステムのマウント失敗、それ以外はカードの初期化失敗（UserDemo のログには「SD カードの線にプルアップ抵抗があるか確認」とある）。UserDemo は失敗時もバスを解放せず、再試行に備えて残している。
+- UserDemo はバスの初期化を `Hal::init()` の最後（`M5.begin()` やディスプレイ・キーボードの初期化の後）で行い、マウントは SD が必要になったときに行う。`format_if_mount_failed=false` なので、未フォーマットのカードは自動では初期化されない。FAT 以外のフォーマットは未確認。
+- ここまでの内容はソースを読んだだけで、**このリポジトリではビルドも実機確認もしていない**。ESP-IDF v5.5.6 でこの API が同じように使えるかは未確認。
+
+## 10. 実装前に確認が必要な項目
 
 1. IMU のチップ型番（`M5.Imu.getType()` をログに出す）と、加速度・角速度の単位と軸の向き。
 2. M5Unified / M5GFX を IDF v5.5.6 のプロジェクトにどう組み込むか（git clone、サブモジュール、または Component Manager）。UserDemo は IDF v5.4.2 で、v5.5.6 でビルドできるかも未確認。
@@ -283,11 +345,15 @@ ir_helper_send(addr, cmd);         // NEC フレームを 1 回送る（ルー�
 4. キーボード用の TCA8418 ドライバを、UserDemo からコピーするか、M5Unified の I2C ラッパー（`m5::I2C_Device`）を使って自作するか。UserDemo のドライバは `M5.In_I2C` 上に作られている。`M5Cardputer` ライブラリの Adv 対応も未確認。
 5. 日本語フォントの扱い。
 6. 赤外線の受信ハードの有無と、GPIO44 とコンソール（UART0）の競合。
+7. SD の SPI ホスト（`SDSPI_HOST_DEFAULT()` の `slot`）と、M5GFX がディスプレイに使う SPI ホストが衝突しないか。UserDemo は同じ起動順（`M5.begin()` の後に `spi_bus_initialize`）で動いているが、各ホスト番号は未確認。
+8. SD の読み出し速度と、`playRaw` のチャンク再生で音切れが出ないバッファの長さ・個数。
+9. 対応する音声形式。WAV の PCM は 6.1 の方式で扱えるが、MP3 などはデコーダ（minimp3 など）の組み込みが別に必要で、未調査。
+10. PSRAM がないことの最終確認（Stamp-S3A のデータシート）。
 
-## 10. 参照先
+## 11. 参照先
 
 - UserDemo（Adv 用）: https://github.com/m5stack/M5Cardputer-UserDemo/tree/CardputerADV
-  - `main/hal/hal.cpp`: 起動順序、IR 初期化
+  - `main/hal/hal.cpp`: 起動順序、IR 初期化、SPI バスと SD カードのマウント
   - `main/hal/hal_config.h`: ピン定義
   - `main/hal/keyboard/`: キーボード（`keyboard.cpp`、`keymap.h`）
   - `main/hal/utils/adafruit_tca8418/`: TCA8418 ドライバ
