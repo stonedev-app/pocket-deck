@@ -1,0 +1,223 @@
+#include "keyboard.hpp"
+
+#include <string.h>
+
+#include "esp_log.h"
+#include <M5Unified.hpp>
+
+// TCA8418 のレジスタ配置とキー配列は docs/cardputer-adv-peripherals.md の 4 章に基づく。
+// ライセンスの都合（4.8）で、GPLv3 表記のある keymap.h は使わず、配列は自前で定義している。
+
+namespace keyboard {
+
+static const char *TAG = "keyboard";
+
+static constexpr uint8_t  TCA8418_ADDR    = 0x34;
+static constexpr uint32_t I2C_FREQ        = 400000;
+static constexpr uint8_t  REG_CFG         = 0x01;
+static constexpr uint8_t  REG_INT_STAT    = 0x02;
+static constexpr uint8_t  REG_KEY_LCK_EC  = 0x03;
+static constexpr uint8_t  REG_KEY_EVENT_A = 0x04;
+static constexpr uint8_t  REG_KP_GPIO1    = 0x1D;
+static constexpr uint8_t  REG_KP_GPIO2    = 0x1E;
+static constexpr uint8_t  REG_KP_GPIO3    = 0x1F;
+static constexpr uint8_t  CFG_KE_IEN      = 0x01;
+static constexpr uint8_t  INT_STAT_K_INT  = 0x01;
+
+static constexpr int ROWS = 4;
+static constexpr int COLS = 14;
+
+// 配列中の特殊キー（ASCII 文字と衝突しない 0x80 以上）
+enum : uint8_t {
+    S_FN = 0x80, S_SHIFT, S_CTRL, S_OPT, S_ALT, S_DEL, S_TAB, S_ENTER, S_SPACE,
+};
+
+// 通常時 [row][col]
+static const uint8_t kBase[ROWS][COLS] = {
+    {'`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', S_DEL},
+    {S_TAB, 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\'},
+    {S_FN, S_SHIFT, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', S_ENTER},
+    {S_CTRL, S_OPT, S_ALT, 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', S_SPACE},
+};
+
+// Shift 時。文字キー以外は通常時と同じ
+static const uint8_t kShift[ROWS][COLS] = {
+    {'~', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', S_DEL},
+    {S_TAB, 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '|'},
+    {S_FN, S_SHIFT, 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', S_ENTER},
+    {S_CTRL, S_OPT, S_ALT, 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', S_SPACE},
+};
+
+static constexpr int QUEUE_SIZE = 16;
+static KeyEvent s_queue[QUEUE_SIZE];
+static int s_head = 0;
+static int s_count = 0;
+static uint8_t s_mods = 0;
+static bool s_ready = false;
+
+static void push(const KeyEvent &ev)
+{
+    if (s_count >= QUEUE_SIZE) {
+        return;  // あふれた分は捨てる
+    }
+    s_queue[(s_head + s_count) % QUEUE_SIZE] = ev;
+    s_count++;
+}
+
+static void setName(KeyEvent &ev, const char *name)
+{
+    strncpy(ev.name, name, sizeof(ev.name) - 1);
+    ev.name[sizeof(ev.name) - 1] = '\0';
+}
+
+static void setChar(KeyEvent &ev, char c)
+{
+    ev.key = Key::Char;
+    ev.ch = c;
+    ev.name[0] = c;
+    ev.name[1] = '\0';
+}
+
+static uint8_t modBit(uint8_t sp)
+{
+    switch (sp) {
+    case S_FN:    return MOD_FN;
+    case S_SHIFT: return MOD_SHIFT;
+    case S_CTRL:  return MOD_CTRL;
+    case S_OPT:   return MOD_OPT;
+    case S_ALT:   return MOD_ALT;
+    default:      return 0;
+    }
+}
+
+// Fn 層（4.5）。定義があれば true
+static bool fnLayer(uint8_t base, KeyEvent &ev)
+{
+    switch (base) {
+    case ';':   ev.key = Key::Up;     setName(ev, "Up");     return true;
+    case ',':   ev.key = Key::Left;   setName(ev, "Left");   return true;
+    case '.':   ev.key = Key::Down;   setName(ev, "Down");   return true;
+    case '/':   ev.key = Key::Right;  setName(ev, "Right");  return true;
+    case '`':   ev.key = Key::Esc;    setName(ev, "Esc");    return true;
+    case S_DEL: ev.key = Key::Delete; setName(ev, "Delete"); return true;
+    default:
+        if (base >= 'a' && base <= 'z') {  // Fn + 英字は大文字
+            setChar(ev, (char)(base - 'a' + 'A'));
+            return true;
+        }
+        return false;
+    }
+}
+
+static void handleEvent(uint8_t raw)
+{
+    const bool pressed = raw & 0x80;
+    const int v = (raw & 0x7F) - 1;
+    if (v < 0) {
+        return;
+    }
+    // TCA8418 の座標から物理配列へ変換（4.3）
+    const int rawRow = v / 10;
+    const int rawCol = v % 10;
+    const int col = rawRow * 2 + (rawCol > 3 ? 1 : 0);
+    const int row = (rawCol + 4) % 4;
+    if (row >= ROWS || col >= COLS) {
+        return;
+    }
+
+    const uint8_t base = kBase[row][col];
+    const uint8_t bit = modBit(base);
+    if (bit) {
+        const bool wasHeld = s_mods & bit;
+        if (pressed) {
+            s_mods |= bit;
+        } else {
+            s_mods &= ~bit;
+        }
+        if (!pressed || wasHeld) {
+            return;
+        }
+    } else if (!pressed) {
+        return;  // 離上は通知しない
+    }
+
+    KeyEvent ev = {};
+    ev.mods = s_mods;
+
+    if (bit) {
+        switch (base) {
+        case S_FN:    ev.key = Key::Fn;    setName(ev, "Fn");    break;
+        case S_SHIFT: ev.key = Key::Shift; setName(ev, "Shift"); break;
+        case S_CTRL:  ev.key = Key::Ctrl;  setName(ev, "Ctrl");  break;
+        case S_OPT:   ev.key = Key::Opt;   setName(ev, "Opt");   break;
+        default:      ev.key = Key::Alt;   setName(ev, "Alt");   break;
+        }
+        push(ev);
+        return;
+    }
+
+    if (!((s_mods & MOD_FN) && fnLayer(base, ev))) {
+        const uint8_t c = (s_mods & MOD_SHIFT) ? kShift[row][col] : base;
+        switch (c) {
+        case S_DEL:   ev.key = Key::Backspace; setName(ev, "Backspace"); break;
+        case S_TAB:   ev.key = Key::Tab;       setName(ev, "Tab");       break;
+        case S_ENTER: ev.key = Key::Enter;     setName(ev, "Enter");     break;
+        case S_SPACE: ev.key = Key::Space;     setName(ev, "Space");     break;
+        default:      setChar(ev, (char)c);                              break;
+        }
+    }
+    push(ev);
+}
+
+bool begin()
+{
+    // 7 行 × 8 列のキーマトリクスに設定し、イベントバッファを空にする（4.1）
+    bool ok = M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_KP_GPIO1, 0x7F, I2C_FREQ);
+    ok &= M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_KP_GPIO2, 0xFF, I2C_FREQ);
+    ok &= M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_KP_GPIO3, 0x00, I2C_FREQ);
+    ok &= M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_CFG, CFG_KE_IEN, I2C_FREQ);
+    if (!ok) {
+        ESP_LOGE(TAG, "TCA8418 init failed");
+        return false;
+    }
+    for (int i = 0; i < 16; i++) {  // FIFO は最大 10 件
+        if (M5.In_I2C.readRegister8(TCA8418_ADDR, REG_KEY_EVENT_A, I2C_FREQ) == 0) {
+            break;
+        }
+    }
+    M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_INT_STAT, 0xFF, I2C_FREQ);
+    s_head = s_count = 0;
+    s_mods = 0;
+    s_ready = true;
+    return true;
+}
+
+void update()
+{
+    if (!s_ready) {
+        return;
+    }
+    // 割り込みピンは使わず、イベント FIFO の件数をポーリングする
+    int n = M5.In_I2C.readRegister8(TCA8418_ADDR, REG_KEY_LCK_EC, I2C_FREQ) & 0x0F;
+    while (n-- > 0) {
+        const uint8_t raw = M5.In_I2C.readRegister8(TCA8418_ADDR, REG_KEY_EVENT_A, I2C_FREQ);
+        if (raw == 0) {
+            break;
+        }
+        handleEvent(raw);
+    }
+    M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_INT_STAT, INT_STAT_K_INT, I2C_FREQ);
+}
+
+bool poll(KeyEvent &out)
+{
+    if (s_count == 0) {
+        return false;
+    }
+    out = s_queue[s_head];
+    s_head = (s_head + 1) % QUEUE_SIZE;
+    s_count--;
+    return true;
+}
+
+}  // namespace keyboard
