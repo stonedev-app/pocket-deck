@@ -1,6 +1,5 @@
 #include <string.h>
 
-#include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "esp_log.h"
 #include <M5Unified.hpp>
 

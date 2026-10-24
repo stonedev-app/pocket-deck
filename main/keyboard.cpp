@@ -2,9 +2,11 @@
 
 #include <string.h>
 
-#include "freertos/FreeRTOS.h"
+#include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "driver/gpio.h"
+#include "esp_attr.h"
 #include "esp_log.h"
 #include <M5Unified.hpp>
 
@@ -54,8 +56,11 @@ static const uint8_t kShift[ROWS][COLS] = {
 static constexpr int QUEUE_SIZE = 16;
 static constexpr uint32_t TASK_STACK_SIZE = 4096;
 static constexpr UBaseType_t TASK_PRIORITY = 5;
-static constexpr TickType_t SCAN_PERIOD = pdMS_TO_TICKS(10);
+static constexpr gpio_num_t INT_PIN = GPIO_NUM_11;  // TCA8418 の INT（Low アクティブ）
+static constexpr TickType_t FALLBACK_PERIOD = pdMS_TO_TICKS(100);  // 割り込みを取りこぼした場合の保険
+static constexpr int MAX_RESCAN = 4;
 static QueueHandle_t s_queue = nullptr;
+static TaskHandle_t s_task = nullptr;
 static uint8_t s_mods = 0;  // 入力タスクだけが扱うので排他制御は不要
 
 static void push(const KeyEvent &ev)
@@ -170,7 +175,7 @@ static void handleEvent(uint8_t raw)
     push(ev);
 }
 
-// 割り込みピンは使わず、イベント FIFO の件数をポーリングする
+// イベント FIFO を読み切って INT を解除する
 static void scan()
 {
     int n = M5.In_I2C.readRegister8(TCA8418_ADDR, REG_KEY_LCK_EC, I2C_FREQ) & 0x0F;
@@ -184,13 +189,50 @@ static void scan()
     M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_INT_STAT, INT_STAT_K_INT, I2C_FREQ);
 }
 
+// I2C は ISR から呼べないので、入力タスクを起こすだけにする
+static void IRAM_ATTR intHandler(void *)
+{
+    BaseType_t woken = pdFALSE;
+    vTaskNotifyGiveFromISR(s_task, &woken);
+    portYIELD_FROM_ISR(woken);
+}
+
 static void inputTask(void *)
 {
-    TickType_t last = xTaskGetTickCount();
     while (1) {
-        vTaskDelayUntil(&last, SCAN_PERIOD);
-        scan();
+        ulTaskNotifyTake(pdTRUE, FALLBACK_PERIOD);
+        // 読み出し中に新しいイベントが来て INT が Low のままなら続けて読む
+        for (int i = 0; i < MAX_RESCAN; i++) {
+            scan();
+            if (gpio_get_level(INT_PIN) != 0) {
+                break;
+            }
+        }
     }
+}
+
+static bool setupInterrupt()
+{
+    gpio_config_t cfg = {};
+    cfg.pin_bit_mask = 1ULL << INT_PIN;
+    cfg.mode = GPIO_MODE_INPUT;
+    cfg.pull_up_en = GPIO_PULLUP_ENABLE;
+    cfg.intr_type = GPIO_INTR_NEGEDGE;
+    esp_err_t err = gpio_config(&cfg);
+    if (err == ESP_OK) {
+        err = gpio_install_isr_service(0);
+        if (err == ESP_ERR_INVALID_STATE) {  // 他で導入済み
+            err = ESP_OK;
+        }
+    }
+    if (err == ESP_OK) {
+        err = gpio_isr_handler_add(INT_PIN, intHandler, nullptr);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "interrupt setup failed: %s", esp_err_to_name(err));
+        return false;
+    }
+    return true;
 }
 
 bool begin()
@@ -218,12 +260,20 @@ bool begin()
             ESP_LOGE(TAG, "queue create failed");
             return false;
         }
-        if (xTaskCreate(inputTask, "keyboard", TASK_STACK_SIZE, nullptr, TASK_PRIORITY, nullptr) != pdPASS) {
+        if (xTaskCreate(inputTask, "keyboard", TASK_STACK_SIZE, nullptr, TASK_PRIORITY, &s_task) != pdPASS) {
             ESP_LOGE(TAG, "task create failed");
             vQueueDelete(s_queue);
             s_queue = nullptr;
             return false;
         }
+        if (!setupInterrupt()) {
+            vTaskDelete(s_task);
+            s_task = nullptr;
+            vQueueDelete(s_queue);
+            s_queue = nullptr;
+            return false;
+        }
+        xTaskNotifyGive(s_task);  // 登録前に押されていたキーを拾う
     }
     return true;
 }
