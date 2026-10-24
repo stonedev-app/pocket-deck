@@ -1,7 +1,6 @@
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
-#include "freertos/task.h"
 #include "esp_log.h"
 #include <M5Unified.hpp>
 
@@ -38,15 +37,13 @@ extern "C" void app_main(void)
 
     if (!keyboard::begin()) {
         M5.Display.println("keyboard init failed");
+        return;
     }
 
+    keyboard::KeyEvent ev;
     while (1) {
-        keyboard::update();
-
-        keyboard::KeyEvent ev;
-        while (keyboard::poll(ev)) {
+        if (keyboard::poll(ev, portMAX_DELAY)) {
             showKey(ev);
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }

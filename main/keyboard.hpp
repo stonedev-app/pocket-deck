@@ -2,8 +2,10 @@
 
 #include <stdint.h>
 
+#include "freertos/FreeRTOS.h"
+
 // Cardputer-Adv キーボード（TCA8418）の入力処理。表示には依存しない。
-// 使い方: begin() の後、メインループで update() を呼び、poll() でイベントを取り出す。
+// 使い方: begin() が入力タスクとキューを作る。poll() でキューからイベントを待って取り出す。
 // イベントは「押された瞬間」だけ（離上や押しっぱなしは出さない）。
 
 namespace keyboard {
@@ -47,10 +49,8 @@ struct KeyEvent {
 // TCA8418 を初期化する。M5.begin() の後に呼ぶ。成功で true。
 bool begin();
 
-// キーイベントを読み取ってキューに積む。毎周回呼ぶ。
-void update();
-
-// 押下イベントを 1 件取り出す。なければ false。
-bool poll(KeyEvent &out);
+// 押下イベントを 1 件取り出す。timeout（tick 数）まで待ち、取れなければ false。
+// portMAX_DELAY で無期限に待つ。begin() が成功していないときは false を返す。
+bool poll(KeyEvent &out, TickType_t timeout);
 
 }  // namespace keyboard
