@@ -43,14 +43,28 @@ struct KeyEvent {
     uint8_t mods;       // 押された時点の修飾キーの状態（MOD_*）
     char name[8];       // 表示・ログ用のキー名（例: "a", "A", "Enter", "Esc", "Up"）
 
+    /** @brief 修飾キー（Fn / Shift / Ctrl / Opt / Alt）自体の押下なら true */
     bool isModifier() const { return key >= Key::Fn; }
 };
 
-// TCA8418 を初期化する。M5.begin() の後に呼ぶ。成功で true。
+/**
+ * @brief TCA8418 を初期化し、入力タスクとキューを作る
+ *
+ * M5.begin() の後に呼ぶ。
+ *
+ * @return 成功で true
+ */
 bool begin();
 
-// 押下イベントを 1 件取り出す。timeout（tick 数）まで待ち、取れなければ false。
-// portMAX_DELAY で無期限に待つ。begin() が成功していないときは false を返す。
+/**
+ * @brief 押下イベントを 1 件取り出す
+ *
+ * begin() が成功していないときは false を返す。
+ *
+ * @param[out] out     取り出したイベント
+ * @param[in]  timeout 待つ時間（tick 数）。portMAX_DELAY で無期限に待つ
+ * @return イベントを取れたら true、時間内に取れなければ false
+ */
 bool poll(KeyEvent &out, TickType_t timeout);
 
 }  // namespace keyboard
