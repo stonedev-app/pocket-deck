@@ -41,7 +41,6 @@ extern "C" void app_main(void)
     }
 
     while (1) {
-        M5.update();
         keyboard::update();
 
         keyboard::KeyEvent ev;
