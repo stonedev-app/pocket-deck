@@ -2,6 +2,9 @@
 
 #include <string.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
 #include "esp_log.h"
 #include <M5Unified.hpp>
 
@@ -49,19 +52,17 @@ static const uint8_t kShift[ROWS][COLS] = {
 };
 
 static constexpr int QUEUE_SIZE = 16;
-static KeyEvent s_queue[QUEUE_SIZE];
-static int s_head = 0;
-static int s_count = 0;
-static uint8_t s_mods = 0;
-static bool s_ready = false;
+static constexpr uint32_t TASK_STACK_SIZE = 4096;
+static constexpr UBaseType_t TASK_PRIORITY = 5;
+static constexpr TickType_t SCAN_PERIOD = pdMS_TO_TICKS(10);
+static QueueHandle_t s_queue = nullptr;
+static uint8_t s_mods = 0;  // 入力タスクだけが扱うので排他制御は不要
 
 static void push(const KeyEvent &ev)
 {
-    if (s_count >= QUEUE_SIZE) {
-        return;  // あふれた分は捨てる
+    if (s_queue) {
+        xQueueSend(s_queue, &ev, 0);  // 満杯なら新しいイベントを捨てる
     }
-    s_queue[(s_head + s_count) % QUEUE_SIZE] = ev;
-    s_count++;
 }
 
 static void setName(KeyEvent &ev, const char *name)
@@ -169,6 +170,29 @@ static void handleEvent(uint8_t raw)
     push(ev);
 }
 
+// 割り込みピンは使わず、イベント FIFO の件数をポーリングする
+static void scan()
+{
+    int n = M5.In_I2C.readRegister8(TCA8418_ADDR, REG_KEY_LCK_EC, I2C_FREQ) & 0x0F;
+    while (n-- > 0) {
+        const uint8_t raw = M5.In_I2C.readRegister8(TCA8418_ADDR, REG_KEY_EVENT_A, I2C_FREQ);
+        if (raw == 0) {
+            break;
+        }
+        handleEvent(raw);
+    }
+    M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_INT_STAT, INT_STAT_K_INT, I2C_FREQ);
+}
+
+static void inputTask(void *)
+{
+    TickType_t last = xTaskGetTickCount();
+    while (1) {
+        vTaskDelayUntil(&last, SCAN_PERIOD);
+        scan();
+    }
+}
+
 bool begin()
 {
     // 7 行 × 8 列のキーマトリクスに設定し、イベントバッファを空にする（4.1）
@@ -186,38 +210,30 @@ bool begin()
         }
     }
     M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_INT_STAT, 0xFF, I2C_FREQ);
-    s_head = s_count = 0;
     s_mods = 0;
-    s_ready = true;
+
+    if (!s_queue) {
+        s_queue = xQueueCreate(QUEUE_SIZE, sizeof(KeyEvent));
+        if (!s_queue) {
+            ESP_LOGE(TAG, "queue create failed");
+            return false;
+        }
+        if (xTaskCreate(inputTask, "keyboard", TASK_STACK_SIZE, nullptr, TASK_PRIORITY, nullptr) != pdPASS) {
+            ESP_LOGE(TAG, "task create failed");
+            vQueueDelete(s_queue);
+            s_queue = nullptr;
+            return false;
+        }
+    }
     return true;
 }
 
-void update()
+bool poll(KeyEvent &out, TickType_t timeout)
 {
-    if (!s_ready) {
-        return;
-    }
-    // 割り込みピンは使わず、イベント FIFO の件数をポーリングする
-    int n = M5.In_I2C.readRegister8(TCA8418_ADDR, REG_KEY_LCK_EC, I2C_FREQ) & 0x0F;
-    while (n-- > 0) {
-        const uint8_t raw = M5.In_I2C.readRegister8(TCA8418_ADDR, REG_KEY_EVENT_A, I2C_FREQ);
-        if (raw == 0) {
-            break;
-        }
-        handleEvent(raw);
-    }
-    M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_INT_STAT, INT_STAT_K_INT, I2C_FREQ);
-}
-
-bool poll(KeyEvent &out)
-{
-    if (s_count == 0) {
+    if (!s_queue) {
         return false;
     }
-    out = s_queue[s_head];
-    s_head = (s_head + 1) % QUEUE_SIZE;
-    s_count--;
-    return true;
+    return xQueueReceive(s_queue, &out, timeout) == pdTRUE;
 }
 
 }  // namespace keyboard
