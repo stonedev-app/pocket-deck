@@ -6,7 +6,7 @@ M5Stack Cardputer-Adv（ESP32-S3）で、ディスプレイ・キーボード・
 
 - 情報源は M5Stack 公式の出荷時デモ [`m5stack/M5Cardputer-UserDemo`](https://github.com/m5stack/M5Cardputer-UserDemo) の **`CardputerADV` ブランチ**と、そこが使う M5Unified のソースを直接読んだ内容。main ブランチは旧 Cardputer 用なので参照しない。
 - 「確認済み」はソースで確認した事実。「未確認」は推測または知識ベースで、実機やデータシートでの検証が必要。
-- 本ドキュメントのコード例は、上記ソースの使い方を元に書いたもので、**キーボード（4 章）を除き、このリポジトリではまだビルド・実機確認をしていない**。キーボードは `main/keyboard.cpp` に実装済みで、ビルドと実機でのキー入力の動作を確認している。
+- 本ドキュメントのコード例は、上記ソースの使い方を元に書いたもので、**キーボード（4 章）と SD カード（9 章、ビルドのみ。実機は未確認）を除き、このリポジトリではまだビルド・実機確認をしていない**。キーボードは `main/keyboard.cpp` に実装済みで、ビルドと実機でのキー入力の動作を確認している。
 - 本プロジェクトの現状は C++（`main/pocket-deck.cpp`）、ESP-IDF v5.5.6、ターゲット esp32s3。UserDemo は ESP-IDF v5.4.2 で、バージョン差の影響は未確認（キーボードと画面表示は v5.5.6 でビルドでき、実機で動いている）。
 
 ## 1. 参照元の構成
@@ -334,7 +334,10 @@ esp_err_t ret = esp_vfs_fat_sdspi_mount("/sdcard", &host, &slot_config, &mount_c
 - マウント後は `fopen("/sdcard/...")` などの標準のファイル API で読み書きできる。
 - 失敗したとき、`ESP_FAIL` はファイルシステムのマウント失敗、それ以外はカードの初期化失敗。
 - `format_if_mount_failed=false` なので、未フォーマットのカードは自動では初期化されない。
-- ここまでの内容はソースを読んだだけで、**このリポジトリではビルドも実機確認もしていない**。ESP-IDF v5.5.6 でこの API が同じように使えるかは未確認。
+- 失敗時は、`spi_bus_initialize` 自体の失敗と、マウントの失敗（上記）のどちらも `esp_err_t` をログに出す。マウント失敗時は `spi_bus_free` でバスを解放する。
+- このリポジトリでは `main/sdcard.cpp` に実装済みで、SCLK=GPIO40、MOSI=GPIO14、MISO=GPIO39、CS=GPIO12 で `/sdcard` にマウントし、ルート直下の `*.wav`（大文字小文字を区別しない）のファイル名を画面とログに出す。画面に出すのは先頭 7 件まで（文字サイズ 2）で、スクロールはしない。`app_main` から `M5.begin()` の後に呼ぶ。
+- 長いファイル名を読めるように、`sdkconfig.defaults` で `CONFIG_FATFS_LFN_HEAP=y` を設定している。
+- **ESP-IDF v5.5.6 でのビルドは成功した。実機での動作（マウント、WAV 一覧の表示、ディスプレイが乱れないこと）は未確認**。
 
 ## 10. 実装前に確認が必要な項目
 
@@ -342,7 +345,7 @@ esp_err_t ret = esp_vfs_fat_sdspi_mount("/sdcard", &host, &slot_config, &mount_c
 2. `record()` が非ブロッキングかどうかの実機確認。
 3. 日本語フォントの扱い。
 4. GPIO44（赤外線送信）とコンソール（UART0）の競合。
-5. SD の SPI ホストと、M5GFX がディスプレイに使う SPI ホストが衝突しないか。UserDemo は `M5.begin()` の後に `spi_bus_initialize` する順で動いている。
+5. SD の SPI ホストと、M5GFX がディスプレイに使う SPI ホストが衝突しないか。UserDemo は `M5.begin()` の後に `spi_bus_initialize` する順で動いている。本プロジェクトも同じ順（`app_main` で `M5.begin()` の後に `sdcard::showWavList()`）で実装したが、実機での衝突の有無は未確認。
 6. SD の読み出し速度と、`playRaw` のチャンク再生で音切れが出ないバッファの長さ・個数。
 7. 対応する音声形式。WAV の PCM は 6.1 の方式で扱えるが、MP3 などはデコーダ（minimp3 など）の組み込みが別に必要。
 
