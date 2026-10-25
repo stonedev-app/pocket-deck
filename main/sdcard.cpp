@@ -4,12 +4,9 @@
 #include <string.h>
 #include <strings.h>
 
-#include "driver/gpio.h"
 #include "driver/sdspi_host.h"
-#include "driver/spi_master.h"
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
-#include "sdmmc_cmd.h"
 #include <M5Unified.hpp>
 
 // SPI 接続とマウントの手順は docs/cardputer-adv-peripherals.md の 9 章に基づく。
