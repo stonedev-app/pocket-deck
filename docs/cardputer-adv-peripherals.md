@@ -335,7 +335,7 @@ esp_err_t ret = esp_vfs_fat_sdspi_mount("/sdcard", &host, &slot_config, &mount_c
 - 失敗したとき、`ESP_FAIL` はファイルシステムのマウント失敗、それ以外はカードの初期化失敗。
 - `format_if_mount_failed=false` なので、未フォーマットのカードは自動では初期化されない。
 - 失敗時は、`spi_bus_initialize` 自体の失敗と、マウントの失敗（上記）のどちらも `esp_err_t` をログに出す。マウント失敗時は `spi_bus_free` でバスを解放する。
-- このリポジトリでは `main/sdcard.cpp` に実装済みで、SCLK=GPIO40、MOSI=GPIO14、MISO=GPIO39、CS=GPIO12 で `/sdcard` にマウントし、ルート直下の `*.wav`（大文字小文字を区別しない）のファイル名を画面とログに出す。画面に出すのは先頭 15 件までで、スクロールはしない。`app_main` から `M5.begin()` の後に呼ぶ。
+- このリポジトリでは `main/sdcard.cpp` に実装済みで、SCLK=GPIO40、MOSI=GPIO14、MISO=GPIO39、CS=GPIO12 で `/sdcard` にマウントし、ルート直下の `*.wav`（大文字小文字を区別しない）のファイル名を画面とログに出す。画面に出すのは先頭 7 件まで（文字サイズ 2）で、スクロールはしない。`app_main` から `M5.begin()` の後に呼ぶ。
 - 長いファイル名を読めるように、`sdkconfig.defaults` で `CONFIG_FATFS_LFN_HEAP=y` を設定している。
 - **ESP-IDF v5.5.6 でのビルドは成功した。実機での動作（マウント、WAV 一覧の表示、ディスプレイが乱れないこと）は未確認**。
 

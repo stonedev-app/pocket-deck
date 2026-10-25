@@ -24,8 +24,8 @@ static constexpr gpio_num_t PIN_MISO = GPIO_NUM_39;
 static constexpr gpio_num_t PIN_CS   = GPIO_NUM_12;
 static constexpr const char *MOUNT_POINT = "/sdcard";
 
-// 画面は 240x135。文字サイズ 1（6x8）で 1 行 8 ピクセルなので、見出し 1 行を除いて 15 行まで入る
-static constexpr int MAX_DISPLAY_FILES = 15;
+// 画面は 240x135。文字サイズ 2（12x16）で 1 行 16 ピクセルなので、見出し 1 行を除いて 7 行まで入る
+static constexpr int MAX_DISPLAY_FILES = 7;
 
 static bool mount()
 {
@@ -81,7 +81,7 @@ bool showWavList()
 {
     M5.Display.fillScreen(TFT_BLACK);
     M5.Display.setCursor(0, 0);
-    M5.Display.setTextSize(1);
+    M5.Display.setTextSize(2);
 
     if (!mount()) return false;
 
