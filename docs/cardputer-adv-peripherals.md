@@ -335,9 +335,16 @@ esp_err_t ret = esp_vfs_fat_sdspi_mount("/sdcard", &host, &slot_config, &mount_c
 - 失敗したとき、`ESP_FAIL` はファイルシステムのマウント失敗、それ以外はカードの初期化失敗。
 - `format_if_mount_failed=false` なので、未フォーマットのカードは自動では初期化されない。
 - 失敗時は、`spi_bus_initialize` 自体の失敗と、マウントの失敗（上記）のどちらも `esp_err_t` をログに出す。マウント失敗時は `spi_bus_free` でバスを解放する。
-- このリポジトリでは `main/sdcard.cpp` に実装済みで、SCLK=GPIO40、MOSI=GPIO14、MISO=GPIO39、CS=GPIO12 で `/sdcard` にマウントし、ルート直下の `*.wav`（大文字小文字を区別しない）のファイル名を画面とログに出す。画面に出すのは先頭 7 件まで（文字サイズ 2）で、スクロールはしない。`app_main` から `M5.begin()` の後に呼ぶ。
+- このリポジトリでは `main/sdcard.cpp` に実装済みで、SCLK=GPIO40、MOSI=GPIO14、MISO=GPIO39、CS=GPIO12 で `/sdcard` にマウントする（`sdcard::begin()`、1 回だけ）。`sdcard::listWav()` がルート直下の `*.wav`（大文字小文字を区別しない）のファイル名を先頭 7 件まで配列に入れる（8 件目以降はログだけ）。表示は `main/pocket-deck.cpp` が行う。`app_main` から `M5.begin()` の後に呼ぶ。
 - 長いファイル名を読めるように、`sdkconfig.defaults` で `CONFIG_FATFS_LFN_HEAP=y` を設定している。
 - **ESP-IDF v5.5.6 でのビルドは成功した。実機での動作（マウント、WAV 一覧の表示、ディスプレイが乱れないこと）は未確認**。
+
+### 9.1 WAV ヘッダの解析と一覧からの選択
+
+- `main/wav.cpp` の `wav::parse(path, info, err, errSize)` が、ファイルの先頭から RIFF/WAVE のチャンクをたどる。`fmt ` チャンクからサンプルレート・チャンネル数・ビット幅を、`data` チャンクから中身の開始位置とバイト数を取り出す。`LIST` など未知のチャンクはサイズ分を読み飛ばす（サイズが奇数のときは 1 バイトのパディングも飛ばす）。画面表示には依存しない。
+- 対応は 16bit PCM（フォーマットタグ 1）のモノラル / ステレオのみ。非対応の形式、`fmt ` / `data` チャンクが無い、`data` がファイルより長い、などのときは理由の文字列を返す。`fmt ` より前に `data` があるファイルは非対応。
+- 画面は文字サイズ 2 で、見出し `WAV files:` の下に先頭 7 件を出し、選択中の行に `>` を付ける。`j` / `Down` で下、`k` / `Up` で上、`Enter` で決定する。決定するとサンプルレート・チャンネル数・ビット幅・データのバイト数を画面とログに出す（失敗時は理由を画面に出す）。`Esc` で一覧に戻る。
+- **ESP-IDF v5.5.6 でのビルドは成功した。実機での動作（キー操作、実際の WAV の解析結果、画面に収まること）は未確認**。
 
 ## 10. 実装前に確認が必要な項目
 
@@ -345,7 +352,7 @@ esp_err_t ret = esp_vfs_fat_sdspi_mount("/sdcard", &host, &slot_config, &mount_c
 2. `record()` が非ブロッキングかどうかの実機確認。
 3. 日本語フォントの扱い。
 4. GPIO44（赤外線送信）とコンソール（UART0）の競合。
-5. SD の SPI ホストと、M5GFX がディスプレイに使う SPI ホストが衝突しないか。UserDemo は `M5.begin()` の後に `spi_bus_initialize` する順で動いている。本プロジェクトも同じ順（`app_main` で `M5.begin()` の後に `sdcard::showWavList()`）で実装したが、実機での衝突の有無は未確認。
+5. SD の SPI ホストと、M5GFX がディスプレイに使う SPI ホストが衝突しないか。UserDemo は `M5.begin()` の後に `spi_bus_initialize` する順で動いている。本プロジェクトも同じ順（`app_main` で `M5.begin()` の後に `sdcard::begin()`）で実装したが、実機での衝突の有無は未確認。
 6. SD の読み出し速度と、`playRaw` のチャンク再生で音切れが出ないバッファの長さ・個数。
 7. 対応する音声形式。WAV の PCM は 6.1 の方式で扱えるが、MP3 などはデコーダ（minimp3 など）の組み込みが別に必要。
 

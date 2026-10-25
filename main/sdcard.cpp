@@ -4,12 +4,9 @@
 #include <string.h>
 #include <strings.h>
 
-#include "driver/gpio.h"
 #include "driver/sdspi_host.h"
-#include "driver/spi_master.h"
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
-#include "sdmmc_cmd.h"
 #include <M5Unified.hpp>
 
 // SPI 接続とマウントの手順は docs/cardputer-adv-peripherals.md の 9 章に基づく。
@@ -24,8 +21,7 @@ static constexpr gpio_num_t PIN_MISO = GPIO_NUM_39;
 static constexpr gpio_num_t PIN_CS   = GPIO_NUM_12;
 static constexpr const char *MOUNT_POINT = "/sdcard";
 
-// 画面は 240x135。文字サイズ 2（12x16）で 1 行 16 ピクセルなので、見出し 1 行を除いて 7 行まで入る
-static constexpr int MAX_DISPLAY_FILES = 7;
+static bool mounted = false;
 
 static bool mount()
 {
@@ -79,40 +75,42 @@ static bool isWav(const struct dirent *ent)
     return dot && strcasecmp(dot, ".wav") == 0;
 }
 
-bool showWavList()
+bool begin()
 {
-    M5.Display.fillScreen(TFT_BLACK);
-    M5.Display.setCursor(0, 0);
-    M5.Display.setTextSize(2);
+    if (mounted) return true;
+    mounted = mount();
+    return mounted;
+}
 
-    if (!mount()) return false;
-
+bool listWav(std::vector<std::string> &names)
+{
+    names.clear();
     DIR *dir = opendir(MOUNT_POINT);
     if (!dir) {
         ESP_LOGE(TAG, "opendir failed: %s", MOUNT_POINT);
-        M5.Display.println("opendir failed");
         return false;
     }
 
-    M5.Display.println("WAV files:");
     int count = 0;
     struct dirent *ent;
     while ((ent = readdir(dir)) != nullptr) {
         if (!isWav(ent)) continue;
         ESP_LOGI(TAG, "wav: %s", ent->d_name);
-        // 画面に入らない分はログだけに出す
-        if (count < MAX_DISPLAY_FILES) {
-            M5.Display.println(ent->d_name);
+        // 選べるのは先頭の MAX_WAV_FILES 件だけ。残りはログだけに出す
+        if (count < MAX_WAV_FILES) {
+            names.push_back(ent->d_name);
         }
         count++;
     }
     closedir(dir);
 
     ESP_LOGI(TAG, "wav files: %d", count);
-    if (count == 0) {
-        M5.Display.println("(none)");
-    }
     return true;
+}
+
+std::string wavPath(const std::string &name)
+{
+    return std::string(MOUNT_POINT) + "/" + name;
 }
 
 }  // namespace sdcard
