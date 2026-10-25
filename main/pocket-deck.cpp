@@ -4,6 +4,7 @@
 #include <M5Unified.hpp>
 
 #include "keyboard.hpp"
+#include "sdcard.hpp"
 
 static const char *TAG = "pocket-deck";
 
@@ -16,14 +17,8 @@ static void showKey(const keyboard::KeyEvent &ev)
     if (ev.mods & keyboard::MOD_OPT)   strcat(mods, "Opt ");
     if (ev.mods & keyboard::MOD_ALT)   strcat(mods, "Alt ");
 
+    // 画面は WAV 一覧に使うので、キーはログにだけ出す
     ESP_LOGI(TAG, "key: %s (mods: %s)", ev.name, mods[0] ? mods : "-");
-
-    M5.Display.fillRect(0, 32, M5.Display.width(), 64, TFT_BLACK);
-    M5.Display.setCursor(0, 32);
-    M5.Display.setTextSize(3);
-    M5.Display.println(ev.name);
-    M5.Display.setTextSize(2);
-    M5.Display.printf("mods: %s\n", mods[0] ? mods : "-");
 }
 
 extern "C" void app_main(void)
@@ -31,11 +26,11 @@ extern "C" void app_main(void)
     M5.begin();
     ESP_LOGI(TAG, "display: %d x %d", (int)M5.Display.width(), (int)M5.Display.height());
 
-    M5.Display.setTextSize(2);
-    M5.Display.println("pocket-deck");
+    // SPI バスの初期化は M5.begin() の後でなければならない（ディスプレイ用 SPI との衝突を避ける）
+    sdcard::showWavList();
 
     if (!keyboard::begin()) {
-        M5.Display.println("keyboard init failed");
+        ESP_LOGE(TAG, "keyboard init failed");
         return;
     }
 
