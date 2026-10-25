@@ -69,10 +69,12 @@ static bool mount()
     return true;
 }
 
-// ファイルの拡張子が .wav（大文字小文字を区別しない）か
+// ファイルの拡張子が .wav（大文字小文字を区別しない）か。
+// macOS がコピー時に作る隠しファイル（._ で始まる名前）は音声ではないので除く
 static bool isWav(const struct dirent *ent)
 {
     if (ent->d_type == DT_DIR) return false;
+    if (ent->d_name[0] == '.') return false;
     const char *dot = strrchr(ent->d_name, '.');
     return dot && strcasecmp(dot, ".wav") == 0;
 }
