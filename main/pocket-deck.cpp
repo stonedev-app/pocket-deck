@@ -9,6 +9,7 @@
 #include "keyboard.hpp"
 #include "player.hpp"
 #include "sdcard.hpp"
+#include "volume.hpp"
 #include "wav.hpp"
 
 static const char *TAG = "pocket-deck";
@@ -21,8 +22,6 @@ static std::vector<std::string> files;
 static int selected = 0;
 static bool showingResult = false;
 
-// 起動時の音量（0〜255）
-static constexpr uint8_t INITIAL_VOLUME = 128;
 // キー入力待ちの時間。再生が終わったかどうかを、この間隔で確認する
 static constexpr TickType_t POLL_TICKS = pdMS_TO_TICKS(100);
 
@@ -51,7 +50,11 @@ static void drawList()
     M5.Display.setCursor(0, 0);
     M5.Display.setTextSize(2);
 
-    M5.Display.println("WAV files:");
+    if (volume::muted()) {
+        M5.Display.println("WAV files:  Vol mute");
+    } else {
+        M5.Display.printf("WAV files:  Vol %d/%d\n", volume::level(), volume::MAX_LEVEL);
+    }
     if (files.empty()) {
         M5.Display.println("(none)");
         return;
@@ -92,6 +95,11 @@ static void drawResult()
                       (unsigned)resultInfo.channels, (unsigned)resultInfo.bitsPerSample,
                       (unsigned)resultInfo.dataBytes);
     M5.Display.printf("%s\n", resultPlaying ? "Playing" : "Stopped");
+    if (volume::muted()) {
+        M5.Display.println("Vol: mute");
+    } else {
+        M5.Display.printf("Vol: %d/%d\n", volume::level(), volume::MAX_LEVEL);
+    }
 }
 
 // 再生を止めて、画面に出す状態を停止中にする（描き直しは呼び出し側）
@@ -105,6 +113,16 @@ static void stopPlayback()
 // （Enter で再生 / 停止、Esc で一覧に戻る。再生中なら止めてから戻る）
 static void handleKey(const keyboard::KeyEvent &ev)
 {
+    // Fn + A / S / D は、Key::Char の大文字 'A' / 'S' / 'D' に MOD_FN が付いたイベントになる。
+    // Shift + A などは MOD_FN が付かないので区別できる
+    if (ev.key == keyboard::Key::Char && (ev.mods & keyboard::MOD_FN) &&
+        (ev.ch == 'A' || ev.ch == 'S' || ev.ch == 'D')) {
+        if (ev.ch == 'A') volume::up();
+        else if (ev.ch == 'S') volume::down();
+        else volume::toggleMute();
+        if (showingResult) drawResult(); else drawList();
+        return;
+    }
     if (showingResult) {
         if (ev.key == keyboard::Key::Esc) {
             stopPlayback();
@@ -145,7 +163,7 @@ extern "C" void app_main(void)
 
     // スピーカーの初期化と音量の設定は、起動時に 1 回だけ行う
     M5.Speaker.begin();
-    M5.Speaker.setVolume(INITIAL_VOLUME);
+    volume::begin();
 
     // SPI バスの初期化は M5.begin() の後でなければならない（ディスプレイ用 SPI との衝突を避ける）
     M5.Display.setTextSize(2);
@@ -167,6 +185,7 @@ extern "C" void app_main(void)
             showKey(ev);
             handleKey(ev);
         }
+        volume::tick();
         // 最後まで再生が終わったら、停止中の表示に戻す（描画はこのタスクだけで行う）
         if (showingResult && resultPlaying && !player::isPlaying()) {
             resultPlaying = false;

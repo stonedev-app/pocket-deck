@@ -217,7 +217,7 @@ M5Unified の `M5.Speaker`（`m5::Speaker_Class`）を使う。コーデック E
 
 ```cpp
 M5.Speaker.begin();                // UserDemo は起動時に一度呼ぶ（コーデックの初期化に時間がかかる）
-M5.Speaker.setVolume(128);         // 0〜255
+M5.Speaker.setVolume(64);          // 0〜255
 
 M5.Speaker.tone(1000, 100);                  // 周波数[Hz], 長さ[ms]
 M5.Speaker.playWav(wav_data, wav_size);      // 内蔵 WAV データを再生
@@ -239,9 +239,10 @@ SD カード上の WAV のように、メモリに収まらない音声は、小
 - バッファは `static int16_t buf[3][2048]`（要素数 2048 を 3 個、順番に使う）。ファイルから読んだ要素数をそのまま `playRaw(buf[i], n, sampleRate, stereo, 1, 0)` に渡す（channel=0 を明示）。ステレオのときは `stereo=true` とし、1 回に読む要素数は偶数にそろえる。
 - 最後まで読んだら、`M5.Speaker.isPlaying(0)` が偽になるまで待ってタスクを終える。`player::isPlaying()` はタスクが動いている間 true を返す。
 - `player::stop()` は停止の要求を立て、`M5.Speaker.stop(0)` でキューを空にし、タスクの終了を待つ（上限 2 秒）。
-- `M5.Speaker.begin()` と `setVolume(128)` は `app_main` で起動時に 1 回だけ呼ぶ。
+- `M5.Speaker.begin()` は `app_main` で起動時に 1 回だけ呼ぶ。続けて `volume::begin()` が NVS（名前空間 `pocket-deck`、キー `vol`、1 バイト）から段階を読み、`setVolume(level * 16)` で反映する（保存がなければ 4 段目 = 64）。
 - 画面は `app_main` のタスクだけが描く。再生タスクは `M5.Display` を触らない。`app_main` のループは、キー入力待ちに 100ms のタイムアウトを付け、再生が終わったら結果画面を `Stopped` に戻す。
-- 操作: 結果画面で `Enter` で再生、再生中に `Enter` で停止、`Esc` で（再生中なら止めて）一覧に戻る。結果画面の最終行に `Playing` / `Stopped` を出す。
+- 操作: 結果画面で `Enter` で再生、再生中に `Enter` で停止、`Esc` で（再生中なら止めて）一覧に戻る。結果画面に `Playing` / `Stopped` と、その下に `Vol: 4/16`（消音中は `Vol: mute`）を出す。
+- 音量: `Fn`+`A` で上げ、`Fn`+`S` で下げ、`Fn`+`D` で消音の切り替え（一覧・結果のどちらでも、再生中も有効）。0〜16 の 17 段階で、`setVolume` には `level * 16`（16 段目は 255）を渡す。消音中は 0 を渡し、段階は覚えておく。消音中に `Fn`+`A`/`S` を押すと解除して 1 段動かす。`Fn`+`A` は `Key::Char` の `'A'` に `MOD_FN` が付いたイベントになる。段階は変更の約 1 秒後に 1 回だけ NVS に書く（消音の切り替えでは書かず、消音の状態も保存しない）。NVS が失敗しても既定値で動かす。一覧の見出しは `WAV files:  Vol 4/16`。
 
 - バッファの回し方はヘッダの `@attention` に従う。コールバックなしなら 3 個を順番に使う。`setBufferReleaseCallback()` で「再生側が読み終えた」通知を受けるなら、通知後に次を埋める前提で 2 個の交互利用でよい。
 - チャンネルを明示すると、キューに空きがないとき、通常のタスクは空きが出るまで待つ（ヘッダの説明）。再生ループはこれに頼っている。
@@ -269,7 +270,7 @@ while (M5.Mic.isRecording()) { M5.delay(1); }   // 録音が終わるまで待�
 // 録音終了、再生に戻す
 M5.Mic.end();
 M5.Speaker.begin();
-M5.Speaker.setVolume(128);
+M5.Speaker.setVolume(64);
 ```
 
 - `record(int16_t* rec_data, size_t array_len, uint32_t sample_rate, bool stereo = false)` は `bool` を返す。`array_len` は要素数。`uint8_t*` 版もあり、サンプルレートを省略すると `config().sample_rate` を使う。
