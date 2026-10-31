@@ -233,21 +233,18 @@ while (M5.Speaker.isPlaying()) { M5.delay(1); }
 
 ### 6.1 長い音声のチャンク再生
 
-SD カード上の WAV のように、メモリに収まらない音声は、小さなバッファに分けて `playRaw` で順に渡す。PSRAM がないので（2 章）、バッファは内部 SRAM に取る。以下は M5Unified のヘッダの記述（`Speaker_Class.hpp`）を元に書いた例で、**ビルドも実機確認もしていない**。
+SD カード上の WAV のように、メモリに収まらない音声は、小さなバッファに分けて `playRaw` で順に渡す。PSRAM がないので（2 章）、バッファは内部 SRAM に取る。M5Unified のヘッダの記述（`Speaker_Class.hpp`）を元に `main/player.cpp` で実装した。**ESP-IDF v5.5.6 でのビルドは成功した。実機での動作（音が出ること、音切れがないこと）は未確認**。
 
-```cpp
-static int16_t buf[3][2048];                 // 要素数。3 個を順番に使う
-int i = 0;
-size_t n;
-while ((n = fread(buf[i], sizeof(int16_t), 2048, fp)) > 0) {
-    M5.Speaker.playRaw(buf[i], n, sample_rate, false, 1, 0);   // channel=0 を明示
-    i = (i + 1) % 3;
-}
-while (M5.Speaker.isPlaying(0)) { M5.delay(1); }
-```
+- `player::start(path, info)` が再生専用の FreeRTOS タスクを作る。タスクは `wav::parse()` が返した `dataOffset` / `dataBytes` から `data` チャンクの範囲だけを読む。`playRaw` はキューが埋まると待つので、キー入力と描画を行う `app_main` のタスクとは別にした。
+- バッファは `static int16_t buf[3][2048]`（要素数 2048 を 3 個、順番に使う）。ファイルから読んだ要素数をそのまま `playRaw(buf[i], n, sampleRate, stereo, 1, 0)` に渡す（channel=0 を明示）。ステレオのときは `stereo=true` とし、1 回に読む要素数は偶数にそろえる。
+- 最後まで読んだら、`M5.Speaker.isPlaying(0)` が偽になるまで待ってタスクを終える。`player::isPlaying()` はタスクが動いている間 true を返す。
+- `player::stop()` は停止の要求を立て、`M5.Speaker.stop(0)` でキューを空にし、タスクの終了を待つ（上限 2 秒）。
+- `M5.Speaker.begin()` と `setVolume(128)` は `app_main` で起動時に 1 回だけ呼ぶ。
+- 画面は `app_main` のタスクだけが描く。再生タスクは `M5.Display` を触らない。`app_main` のループは、キー入力待ちに 100ms のタイムアウトを付け、再生が終わったら結果画面を `Stopped` に戻す。
+- 操作: 結果画面で `Enter` で再生、再生中に `Enter` で停止、`Esc` で（再生中なら止めて）一覧に戻る。結果画面の最終行に `Playing` / `Stopped` を出す。
 
 - バッファの回し方はヘッダの `@attention` に従う。コールバックなしなら 3 個を順番に使う。`setBufferReleaseCallback()` で「再生側が読み終えた」通知を受けるなら、通知後に次を埋める前提で 2 個の交互利用でよい。
-- チャンネルを明示すると、キューに空きがないとき、通常のタスクは空きが出るまで待つ（ヘッダの説明）。上の例はこれに頼ってループを組んだ。
+- チャンネルを明示すると、キューに空きがないとき、通常のタスクは空きが出るまで待つ（ヘッダの説明）。再生ループはこれに頼っている。
 - `isPlaying(uint8_t channel)` の戻り値は、0=再生していない、1=再生中でキューに空きあり、2=再生中でキューに空きなし。チャンネルを省略した `isPlaying()` は、全体の再生状態を返す。
 - WAV のヘッダ（`fmt ` チャンクのサンプルレート・チャンネル数・ビット幅、`data` チャンクの位置）は、自前で読む必要がある。M5Unified に、ファイルから読むための WAV パーサはない（`playWav` はメモリ上の全データを渡す方式）。ステレオは `playRaw` の `stereo` 引数で指定する。
 - バッファ長と個数は、音切れが出たら、チャンクを大きくするか個数を増やして調整する。
@@ -353,7 +350,7 @@ esp_err_t ret = esp_vfs_fat_sdspi_mount("/sdcard", &host, &slot_config, &mount_c
 3. 日本語フォントの扱い。
 4. GPIO44（赤外線送信）とコンソール（UART0）の競合。
 5. SD の SPI ホストと、M5GFX がディスプレイに使う SPI ホストが衝突しないか。UserDemo は `M5.begin()` の後に `spi_bus_initialize` する順で動いている。本プロジェクトも同じ順（`app_main` で `M5.begin()` の後に `sdcard::begin()`）で実装したが、実機での衝突の有無は未確認。
-6. SD の読み出し速度と、`playRaw` のチャンク再生で音切れが出ないバッファの長さ・個数。
+6. SD の読み出し速度と、`playRaw` のチャンク再生で音切れが出ないバッファの長さ・個数。現在は 2048 要素を 3 個で実装したが、音が出ること・音切れがないことは未確認（実機で確認する）。
 7. 対応する音声形式。WAV の PCM は 6.1 の方式で扱えるが、MP3 などはデコーダ（minimp3 など）の組み込みが別に必要。
 
 ## 11. 参照先
