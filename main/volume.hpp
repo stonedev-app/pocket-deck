@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-// 音量（0〜16 の 17 段階）の管理。段階は NVS に保存し、起動時に復元する。
+// 音量（0〜16 の 17 段階）の管理。setVolume に渡す値は volume.cpp の表から引く。段階は NVS に保存し、起動時に復元する。
 namespace volume {
 
 constexpr int MAX_LEVEL = 16;

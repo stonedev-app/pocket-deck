@@ -21,12 +21,18 @@ static bool s_dirty = false;        // 保存待ちの変更がある
 static TickType_t s_changedAt = 0;  // 最後に段階を変えた時刻
 static bool s_nvsReady = false;
 
-/** @brief 現在の段階と消音を M5.Speaker に反映する。16 段目は 255 に丸める */
+// 段階（0〜16）から setVolume に渡す値への対応表。下の側を細かくしてある。
+// 値は実機で聞いて調整するので、直すときはここだけを変える。
+static constexpr uint8_t VOLUME_TABLE[MAX_LEVEL + 1] = {
+    0,                                                    // 0 段目: 無音
+    6, 8, 10, 13, 16, 21, 27, 35, 44, 57, 73, 94, 120, 154, 198, 255,  // 1〜16 段目
+};
+
+/** @brief 現在の段階と消音を M5.Speaker に反映する。消音中は 0、それ以外は表から引く */
 static void apply()
 {
-    int v = s_muted ? 0 : s_level * 16;
-    if (v > 255) v = 255;
-    M5.Speaker.setVolume((uint8_t)v);
+    uint8_t v = s_muted ? 0 : VOLUME_TABLE[s_level];
+    M5.Speaker.setVolume(v);
 }
 
 static void markChanged()
