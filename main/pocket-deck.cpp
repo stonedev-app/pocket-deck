@@ -17,9 +17,6 @@ static const char *TAG = "pocket-deck";
 
 static bool showingResult = false;
 
-// 待ちのタイムアウト。どちらのキューにも届かない間も、volume::tick() の保存判定のために起きる
-static constexpr TickType_t WAIT_TICKS = pdMS_TO_TICKS(100);
-
 static void showKey(const keyboard::KeyEvent &ev)
 {
     char mods[24] = "";
@@ -154,7 +151,7 @@ extern "C" void app_main(void)
     }
 
     while (1) {
-        QueueSetMemberHandle_t member = xQueueSelectFromSet(set, WAIT_TICKS);
+        QueueSetMemberHandle_t member = xQueueSelectFromSet(set, portMAX_DELAY);
         // 届いたキューから 1 件だけ取る。0 tick で取るので、stopPlayback() が先に取った分で
         // 空だったときは何もしない
         if (member == keyboard::queue()) {
@@ -167,6 +164,5 @@ extern "C" void app_main(void)
             player::EndReason reason;
             if (player::receive(reason, 0)) handleEnd(reason);
         }
-        volume::tick();
     }
 }
