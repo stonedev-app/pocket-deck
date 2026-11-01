@@ -237,10 +237,10 @@ SD カード上の WAV のように、メモリに収まらない音声は、小
 
 - `player::start(path, info)` が再生専用の FreeRTOS タスクを作る。タスクは `wav::parse()` が返した `dataOffset` / `dataBytes` から `data` チャンクの範囲だけを読む。`playRaw` はキューが埋まると待つので、キー入力と描画を行う `app_main` のタスクとは別にした。
 - バッファは `static int16_t buf[3][2048]`（要素数 2048 を 3 個、順番に使う）。ファイルから読んだ要素数をそのまま `playRaw(buf[i], n, sampleRate, stereo, 1, 0)` に渡す（channel=0 を明示）。ステレオのときは `stereo=true` とし、1 回に読む要素数は偶数にそろえる。
-- 最後まで読んだら、`M5.Speaker.isPlaying(0)` が偽になるまで待ってタスクを終える。`player::isPlaying()` はタスクが動いている間 true を返す。
-- `player::stop()` は停止の要求を立て、`M5.Speaker.stop(0)` でキューを空にし、タスクの終了を待つ（上限 2 秒）。
+- 最後まで読んだら、`M5.Speaker.isPlaying(0)` が偽になるまで待ってタスクを終える。タスクは終わるとき、終了の理由（`Finished` / `Stopped` / `Failed`）を `player` が持つ FreeRTOS のキュー（長さ 4）に 1 件送る。`player::isPlaying()` は廃止した。
+- `player::stop()` は停止の要求を立て、`M5.Speaker.stop(0)` でキューを空にし、タスクの終了を待つ（上限 2 秒）。止めた場合も `Stopped` の通知が届くので、`app_main` は `stop()` の直後にキューを空にして古い通知を捨てる。
 - `M5.Speaker.begin()` は `app_main` で起動時に 1 回だけ呼ぶ。続けて `volume::begin()` が NVS（名前空間 `pocket-deck`、キー `vol`、1 バイト）から段階を読み、段階に対応する値を `setVolume` で反映する（保存がなければ 4 段目 = 13）。
-- 画面は `app_main` のタスクだけが描く。再生タスクは `M5.Display` を触らない。`app_main` のループは、キー入力待ちに 100ms のタイムアウトを付け、再生が終わったら結果画面を `Stopped` に戻す。
+- 画面は `app_main` のタスクだけが描く。再生タスクは `M5.Display` を触らない。`app_main` のループは、キー入力のキューと `player` の終了通知のキューを QueueSet（`CONFIG_FREERTOS_USE_QUEUE_SETS=y` が必要で、`sdkconfig.defaults` に追加した）にまとめて待ち、終了通知が届いたら結果画面を `Stopped` に戻す。100ms のタイムアウトは `volume::tick()`（音量の保存判定）のためで、再生の確認には使わない。
 - 操作: 結果画面で `Enter` で再生、再生中に `Enter` で停止、`Esc` で（再生中なら止めて）一覧に戻る。結果画面に `Playing` / `Stopped` と、その下に `Vol: 4/16`（消音中は `Vol: mute`）を出す。
 - 音量: `Fn`+`A` で上げ、`Fn`+`S` で下げ、`Fn`+`D` で消音の切り替え（一覧・結果のどちらでも、再生中も有効）。0〜16 の 17 段階で、`setVolume` には `volume.cpp` の表 `VOLUME_TABLE`（下の側を細かくした値。0 段目は 0、1〜16 段目は 6, 8, 10, 13, 16, 21, 27, 35, 44, 57, 73, 94, 120, 154, 198, 255）から引いた値を渡す。値は実機で聞いて調整する。消音中は 0 を渡し、段階は覚えておく。消音中に `Fn`+`A`/`S` を押すと解除して 1 段動かす。`Fn`+`A` は `Key::Char` の `'A'` に `MOD_FN` が付いたイベントになる。段階は変更の約 1 秒後に 1 回だけ NVS に書く（消音の切り替えでは書かず、消音の状態も保存しない）。NVS が失敗しても既定値で動かす。一覧の見出しは `WAV files:  Vol 4/16`。
 

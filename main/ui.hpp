@@ -17,7 +17,7 @@ struct State {
     wav::Info resultInfo;
     bool resultOk = false;
     char resultErr[40] = "";
-    bool resultPlaying = false;  // 画面に出している状態。player::isPlaying() との差で終了を知る
+    bool resultPlaying = false;  // 画面に出している状態。player の終了通知を受けて下ろす
 };
 
 /** @brief 描画が使う状態。更新は呼び出し側で行い、その後 drawList() / drawResult() で描き直す */

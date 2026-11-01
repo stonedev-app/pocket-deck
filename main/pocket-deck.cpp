@@ -17,8 +17,8 @@ static const char *TAG = "pocket-deck";
 
 static bool showingResult = false;
 
-// キー入力待ちの時間。再生が終わったかどうかを、この間隔で確認する
-static constexpr TickType_t POLL_TICKS = pdMS_TO_TICKS(100);
+// 待ちのタイムアウト。どちらのキューにも届かない間も、volume::tick() の保存判定のために起きる
+static constexpr TickType_t WAIT_TICKS = pdMS_TO_TICKS(100);
 
 static void showKey(const keyboard::KeyEvent &ev)
 {
@@ -54,7 +54,21 @@ static void parseSelected()
 static void stopPlayback()
 {
     player::stop();
+    // stop() で出た Stopped の通知はここで捨てる。残すと、すぐ再生し直したときに
+    // 古い通知で新しい再生が止まったことになってしまう
+    player::EndReason reason;
+    while (player::receive(reason, 0)) {}
     ui::state.resultPlaying = false;
+}
+
+// 再生が終わった通知を受けたら、停止中の表示に戻す（描画はこのタスクだけで行う）
+static void handleEnd(player::EndReason reason)
+{
+    ESP_LOGI(TAG, "playback end: %d", (int)reason);
+    if (showingResult && ui::state.resultPlaying) {
+        ui::state.resultPlaying = false;
+        ui::drawResult();
+    }
 }
 
 // 一覧の操作（j / Down で下、k / Up で上、Enter で決定）と、結果表示の操作
@@ -125,22 +139,34 @@ extern "C" void app_main(void)
     }
     ui::drawList();
 
-    if (!keyboard::begin()) {
-        ESP_LOGE(TAG, "keyboard init failed");
+    if (!keyboard::begin() || !player::begin()) {
+        ESP_LOGE(TAG, "keyboard or player init failed");
         return;
     }
 
-    keyboard::KeyEvent ev;
+    // キー入力と再生終了の 2 つのキューを QueueSet にまとめ、どちらかに届くまで 1 か所で待つ。
+    // セットの大きさは、入れるキューの長さの合計にする
+    QueueSetHandle_t set = xQueueCreateSet(keyboard::QUEUE_SIZE + player::EVENT_QUEUE_LEN);
+    if (!set || xQueueAddToSet(keyboard::queue(), set) != pdPASS ||
+        xQueueAddToSet(player::eventQueue(), set) != pdPASS) {
+        ESP_LOGE(TAG, "queue set init failed");
+        return;
+    }
+
     while (1) {
-        if (keyboard::poll(ev, POLL_TICKS)) {
-            showKey(ev);
-            handleKey(ev);
+        QueueSetMemberHandle_t member = xQueueSelectFromSet(set, WAIT_TICKS);
+        // 届いたキューから 1 件だけ取る。0 tick で取るので、stopPlayback() が先に取った分で
+        // 空だったときは何もしない
+        if (member == keyboard::queue()) {
+            keyboard::KeyEvent ev;
+            if (keyboard::poll(ev, 0)) {
+                showKey(ev);
+                handleKey(ev);
+            }
+        } else if (member == player::eventQueue()) {
+            player::EndReason reason;
+            if (player::receive(reason, 0)) handleEnd(reason);
         }
         volume::tick();
-        // 最後まで再生が終わったら、停止中の表示に戻す（描画はこのタスクだけで行う）
-        if (showingResult && ui::state.resultPlaying && !player::isPlaying()) {
-            ui::state.resultPlaying = false;
-            ui::drawResult();
-        }
     }
 }

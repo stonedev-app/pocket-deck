@@ -55,7 +55,6 @@ static const uint8_t kShift[ROWS][COLS] = {
     {S_CTRL, S_OPT, S_ALT, 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', S_SPACE},
 };
 
-static constexpr int QUEUE_SIZE = 16;
 static constexpr uint32_t TASK_STACK_SIZE = 4096;
 static constexpr UBaseType_t TASK_PRIORITY = 5;
 static constexpr gpio_num_t INT_PIN = GPIO_NUM_11;  // TCA8418 の INT（Low アクティブ）
@@ -316,6 +315,11 @@ bool poll(KeyEvent &out, TickType_t timeout)
         return false;
     }
     return xQueueReceive(s_queue, &out, timeout) == pdTRUE;
+}
+
+QueueHandle_t queue()
+{
+    return s_queue;
 }
 
 }  // namespace keyboard
