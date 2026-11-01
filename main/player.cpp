@@ -6,6 +6,7 @@
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 #include <M5Unified.hpp>
 
@@ -31,14 +32,26 @@ static std::string playPath;
 static wav::Info playInfo;
 static volatile bool running = false;  // 再生用のタスクが動いている間 true
 static volatile bool stopReq = false;  // stop() からタスクへの停止の要求
+static QueueHandle_t eventQ = nullptr;  // 終了通知のキュー
+
+/** @brief 終了通知をキューへ入れる。満杯なら捨てる */
+static void notifyEnd(EndReason reason)
+{
+    if (!eventQ || xQueueSend(eventQ, &reason, 0) != pdTRUE) {
+        ESP_LOGE(TAG, "end event dropped");
+    }
+}
 
 static void playTask(void *)
 {
+    EndReason reason = EndReason::Finished;
     FILE *f = fopen(playPath.c_str(), "rb");
     if (!f) {
         ESP_LOGE(TAG, "cannot open: %s", playPath.c_str());
+        reason = EndReason::Failed;
     } else if (fseek(f, (long)playInfo.dataOffset, SEEK_SET) != 0) {
         ESP_LOGE(TAG, "seek failed");
+        reason = EndReason::Failed;
     } else {
         bool stereo = playInfo.channels == 2;
         size_t remain = playInfo.dataBytes / sizeof(int16_t);  // 残りの要素数
@@ -49,7 +62,11 @@ static void playTask(void *)
             if (want == 0) break;
             size_t n = fread(buf[i], sizeof(int16_t), want, f);
             if (stereo) n &= ~(size_t)1;
-            if (n == 0) break;
+            if (n == 0) {  // データが残っているのに読めない
+                ESP_LOGE(TAG, "read failed");
+                reason = EndReason::Failed;
+                break;
+            }
             // キューに空きがないときは、空きが出るまでここで待つ
             M5.Speaker.playRaw(buf[i], n, playInfo.sampleRate, stereo, 1, CHANNEL);
             i = (i + 1) % BUF_COUNT;
@@ -60,14 +77,40 @@ static void playTask(void *)
         if (stopReq) M5.Speaker.stop(CHANNEL);
     }
     if (f) fclose(f);
+    if (stopReq) reason = EndReason::Stopped;
 
+    // running を下ろす前に送る。stop() から戻った時点で、通知がキューに入っていることを保証する
+    notifyEnd(reason);
     running = false;
     vTaskDelete(NULL);
 }
 
+bool begin()
+{
+    if (!eventQ) {
+        eventQ = xQueueCreate(EVENT_QUEUE_LEN, sizeof(EndReason));
+        if (!eventQ) {
+            ESP_LOGE(TAG, "queue create failed");
+            return false;
+        }
+    }
+    return true;
+}
+
+QueueHandle_t eventQueue()
+{
+    return eventQ;
+}
+
+bool receive(EndReason &out, TickType_t timeout)
+{
+    if (!eventQ) return false;
+    return xQueueReceive(eventQ, &out, timeout) == pdTRUE;
+}
+
 bool start(const char *path, const wav::Info &info)
 {
-    if (running) return false;
+    if (running || !eventQ) return false;
     playPath = path;
     playInfo = info;
     stopReq = false;
@@ -90,11 +133,6 @@ void stop()
         vTaskDelay(POLL_TICKS);
     }
     if (running) ESP_LOGE(TAG, "player task did not finish");
-}
-
-bool isPlaying()
-{
-    return running;
 }
 
 }  // namespace player

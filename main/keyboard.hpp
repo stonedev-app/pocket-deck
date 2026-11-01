@@ -3,12 +3,16 @@
 #include <stdint.h>
 
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
+#include "freertos/queue.h"
 
 // Cardputer-Adv キーボード（TCA8418）の入力処理。表示には依存しない。
 // 使い方: begin() が入力タスクとキューを作る。poll() でキューからイベントを待って取り出す。
 // イベントは「押された瞬間」だけ（離上や押しっぱなしは出さない）。
+// 他のキューと一緒に待ちたいときは、queue() のハンドルを QueueSet に入れる。
 
 namespace keyboard {
+
+constexpr int QUEUE_SIZE = 16;  // キューの長さ。QueueSet の大きさを決める側が使う
 
 enum class Key : uint8_t {
     Char,       // 文字キー。KeyEvent::ch に ASCII 文字が入る
@@ -66,5 +70,12 @@ bool begin();
  * @return イベントを取れたら true、時間内に取れなければ false
  */
 bool poll(KeyEvent &out, TickType_t timeout);
+
+/**
+ * @brief イベントのキューのハンドルを返す
+ *
+ * QueueSet に入れて待つためのもの。取り出しは poll() で行う。begin() が成功する前は nullptr。
+ */
+QueueHandle_t queue();
 
 }  // namespace keyboard
