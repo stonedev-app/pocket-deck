@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/timers.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include <M5Unified.hpp>
@@ -17,8 +18,7 @@ static constexpr TickType_t SAVE_DELAY = pdMS_TO_TICKS(1000);  // 最後の変�
 
 static int s_level = DEFAULT_LEVEL;
 static bool s_muted = false;
-static bool s_dirty = false;        // 保存待ちの変更がある
-static TickType_t s_changedAt = 0;  // 最後に段階を変えた時刻
+static TimerHandle_t s_saveTimer = nullptr;  // 最後の変更から SAVE_DELAY 後に save() を呼ぶ one-shot
 static bool s_nvsReady = false;
 
 // 段階（0〜16）から setVolume に渡す値への対応表。下の側を細かくしてある。
@@ -33,12 +33,6 @@ static void apply()
 {
     uint8_t v = s_muted ? 0 : VOLUME_TABLE[s_level];
     M5.Speaker.setVolume(v);
-}
-
-static void markChanged()
-{
-    s_dirty = true;
-    s_changedAt = xTaskGetTickCount();
 }
 
 static void load()
@@ -92,8 +86,22 @@ static void save()
     }
 }
 
+// タイマータスクで動く。s_level を読むだけにする（NVS 書き込みのブロックはタイマータスクだけが受ける）
+static void onSaveTimer(TimerHandle_t)
+{
+    save();
+}
+
+/** @brief 保存タイマーを張り直す。連打しても最後の変更から SAVE_DELAY 後に 1 回だけ保存される */
+static void markChanged()
+{
+    if (s_saveTimer) xTimerReset(s_saveTimer, 0);
+}
+
 void begin()
 {
+    s_saveTimer = xTimerCreate("vol_save", SAVE_DELAY, pdFALSE, nullptr, onSaveTimer);
+    if (!s_saveTimer) ESP_LOGE(TAG, "save timer create failed");
     load();
     s_muted = false;  // 消音は保存しない。起動時は必ず解除
     apply();
@@ -124,14 +132,6 @@ void toggleMute()
 {
     s_muted = !s_muted;
     apply();
-}
-
-void tick()
-{
-    if (s_dirty && (TickType_t)(xTaskGetTickCount() - s_changedAt) >= SAVE_DELAY) {
-        s_dirty = false;
-        save();
-    }
 }
 
 int level() { return s_level; }
