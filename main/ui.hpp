@@ -8,7 +8,7 @@
 #include "player.hpp"
 #include "wav.hpp"
 
-// 画面の描画と、画面モード・キー処理・再生の扱い。メインタスクだけで使う
+// 画面の描画と、画面モード・キー処理・再生の扱い。画面のタスク（screen）だけで使う
 namespace ui {
 
 /** @brief 画面モード */
