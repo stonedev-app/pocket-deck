@@ -3,7 +3,6 @@
 
 #include "keyboard.hpp"
 #include "player.hpp"
-#include "screen.hpp"
 #include "sdcard.hpp"
 #include "ui.hpp"
 #include "volume.hpp"
@@ -14,7 +13,7 @@ static const char *TAG = "pocket-deck";
 static void fail(const char *msg)
 {
     ESP_LOGE(TAG, "init failed: %s", msg);
-    M5.Display.printf("\nInit failed:\n%s\n", msg);
+    ui::showError(msg);
 }
 
 extern "C" void app_main(void)
@@ -29,11 +28,9 @@ extern "C" void app_main(void)
     // SPI バスの初期化は M5.begin() の後でなければならない（ディスプレイ用 SPI との衝突を避ける）
     M5.Display.setTextSize(2);
     if (!sdcard::begin()) return fail("sdcard");
-    if (!sdcard::listWav(ui::state.files)) return fail("opendir");
     if (!keyboard::begin()) return fail("keyboard");
     if (!player::begin()) return fail("player");
 
-    // 初期化がすべて成功してから描画を始め、画面のタスクを起動する
-    ui::drawList();
-    if (!screen::start()) return fail("screen task");
+    // 初期化がすべて成功してから、一覧を描いて画面のタスクを起動する
+    if (!ui::start()) return fail("ui");
 }
