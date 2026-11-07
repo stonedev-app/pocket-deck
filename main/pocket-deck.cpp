@@ -1,8 +1,5 @@
 #include <string.h>
 
-#include <string>
-#include <vector>
-
 #include "esp_log.h"
 #include <M5Unified.hpp>
 
@@ -11,7 +8,6 @@
 #include "sdcard.hpp"
 #include "ui.hpp"
 #include "volume.hpp"
-#include "wav.hpp"
 
 static const char *TAG = "pocket-deck";
 
