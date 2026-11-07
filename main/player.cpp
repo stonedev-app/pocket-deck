@@ -5,7 +5,7 @@
 #include <string>
 
 #include "esp_log.h"
-#include "freertos/FreeRTOS.h"
+#include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include <M5Unified.hpp>
