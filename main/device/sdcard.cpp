@@ -15,6 +15,7 @@ namespace sdcard {
 
 static const char *TAG = "sdcard";
 
+// Cardputer-Adv の基板で SD スロットに固定配線されているピン
 static constexpr gpio_num_t PIN_SCLK = GPIO_NUM_40;
 static constexpr gpio_num_t PIN_MOSI = GPIO_NUM_14;
 static constexpr gpio_num_t PIN_MISO = GPIO_NUM_39;
@@ -25,14 +26,17 @@ static bool mounted = false;
 
 static bool mount()
 {
+    // SD カードは SDMMC ではなく SPI モードで配線されているので、SDSPI ホストを使う
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
 
     spi_bus_config_t bus_cfg = {};
     bus_cfg.mosi_io_num     = PIN_MOSI;
     bus_cfg.miso_io_num     = PIN_MISO;
     bus_cfg.sclk_io_num     = PIN_SCLK;
+    // WP / HD は SD カードでは使わない（クアッド SPI ではない）
     bus_cfg.quadwp_io_num   = -1;
     bus_cfg.quadhd_io_num   = -1;
+    // 1 回の転送の上限。ESP-IDF の SD SPI サンプルと同じ値
     bus_cfg.max_transfer_sz = 4000;
     esp_err_t ret = spi_bus_initialize((spi_host_device_t)host.slot, &bus_cfg, SDSPI_DEFAULT_DMA);
     if (ret != ESP_OK) {
@@ -42,8 +46,11 @@ static bool mount()
     }
 
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {};
+    // マウントに失敗してもフォーマットしない。カード上の WAV を誤って消さないため
     mount_config.format_if_mount_failed = false;
+    // 同時に開けるファイル数。再生は 1 つしか開かないが、ESP-IDF のサンプルと同じ値にしてある
     mount_config.max_files              = 5;
+    // フォーマット時のクラスタサイズ。上でフォーマットしないので実質使われず、サンプルの既定値のまま
     mount_config.allocation_unit_size   = 16 * 1024;
 
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
@@ -57,6 +64,7 @@ static bool mount()
         const char *kind = (ret == ESP_FAIL) ? "filesystem" : "card init";
         ESP_LOGE(TAG, "mount failed (%s): %s (0x%x)", kind, esp_err_to_name(ret), (unsigned)ret);
         M5.Display.printf("SD mount failed\n%s\n0x%x\n", kind, (unsigned)ret);
+        // バスを解放しておく。しないと、再度 begin() したときに spi_bus_initialize が失敗する
         spi_bus_free((spi_host_device_t)host.slot);
         return false;
     }

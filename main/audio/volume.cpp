@@ -14,14 +14,17 @@ static const char *TAG = "volume";
 
 static constexpr const char *NVS_NAMESPACE = "pocket-deck";
 static constexpr const char *NVS_KEY = "vol";
-static constexpr TickType_t SAVE_DELAY = pdMS_TO_TICKS(1000);  // 最後の変更から書き込みまで
+// 最後の変更から書き込みまで。キーを連打するたびに書くとフラッシュの書き込み回数（寿命）を
+// 消費し、書き込み中は他の NVS アクセスもブロックされるので、操作が落ち着いてから 1 回だけ書く
+static constexpr TickType_t SAVE_DELAY = pdMS_TO_TICKS(1000);  // [ms]
 
 static int s_level = DEFAULT_LEVEL;
 static bool s_muted = false;
 static TimerHandle_t s_saveTimer = nullptr;  // 最後の変更から SAVE_DELAY 後に save() を呼ぶ one-shot
 static bool s_nvsReady = false;
 
-// 段階（0〜16）から setVolume に渡す値への対応表。下の側を細かくしてある。
+// 段階（0〜16）から setVolume に渡す値（0〜255）への対応表。下の側を細かくしてある。
+// 人の耳は音量を対数的に感じるので、等間隔にすると上の段階だけ大きく変わり、下の段階は差が分からなくなる。
 // 値は実機で聞いて調整するので、直すときはここだけを変える。
 static constexpr uint8_t VOLUME_TABLE[MAX_LEVEL + 1] = {
     0,                                                    // 0 段目: 無音
@@ -37,6 +40,8 @@ static void apply()
 
 static void load()
 {
+    // NVS の初期化はこのモジュールが担当する（他に NVS を使う所がないため）。
+    // 空きページがない・新しい版で作られた領域のときは、消して作り直す。音量の設定が消えるだけで済む
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         nvs_flash_erase();
@@ -100,6 +105,7 @@ static void markChanged()
 
 void begin()
 {
+    // one-shot（第 3 引数 pdFALSE）。変更のたびに markChanged() が張り直すので、連打の間は発火しない
     s_saveTimer = xTimerCreate("vol_save", SAVE_DELAY, pdFALSE, nullptr, onSaveTimer);
     if (!s_saveTimer) ESP_LOGE(TAG, "save timer create failed");
     load();

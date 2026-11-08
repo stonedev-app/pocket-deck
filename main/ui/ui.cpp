@@ -22,6 +22,8 @@ namespace ui {
 
 static const char *TAG = "ui";
 
+// 描画（printf の整形）と std::string / vector を扱うので、他のタスクの倍の 8KB を取る。
+// 優先度は keyboard / player と同じ
 static const uint32_t TASK_STACK = 8192;
 static const UBaseType_t TASK_PRIORITY = 5;
 
@@ -31,7 +33,8 @@ enum class Mode : uint8_t {
     Result,  // 結果表示（再生 / 停止）
 };
 
-// 画面の状態。画面のタスクだけが更新する（起動前の start() の中を除く）
+// 画面の状態。画面のタスクだけが更新する（起動前の start() の中を除く）。
+// 他のタスク（keyboard / player）とは、キューで通知を受けるだけで共有せず、排他制御を要らなくしている
 struct State {
     Mode mode = Mode::List;          // 今の画面モード
     std::vector<std::string> files;  // 一覧に出す WAV のファイル名
@@ -40,7 +43,7 @@ struct State {
     // 結果画面に出している WAV の解析結果
     wav::Info resultInfo;
     bool resultOk = false;
-    char resultErr[40] = "";
+    char resultErr[40] = "";  // wav::parse() の理由。文字サイズ 2 の 2 行（20 文字 × 2）に収まる長さ
     bool resultPlaying = false;  // 画面に出している状態。player の終了通知を受けて下ろす
 };
 
@@ -135,6 +138,8 @@ static void stopPlayback()
     state.resultPlaying = false;
 }
 
+// 再生の終了通知を受けたときの処理。Esc で結果画面を抜けた後に届いた通知で、
+// 一覧画面を結果画面で描き潰さないよう、結果画面で再生中のときだけ描き直す
 static void handleEnd(player::EndReason reason)
 {
     ESP_LOGI(TAG, "playback end: %d", (int)reason);
@@ -200,6 +205,8 @@ static void showKey(const keyboard::KeyEvent &ev)
     ESP_LOGI(TAG, "key: %s (mods: %s)", ev.name, mods[0] ? mods : "-");
 }
 
+// 画面のタスク。キー入力と再生の終了通知を QueueSet で 1 か所に集めて待つ。
+// 描画と state の更新をこのタスクだけに集めることで、排他制御なしにしている
 static void screenTask(void *arg)
 {
     QueueSetHandle_t set = static_cast<QueueSetHandle_t>(arg);

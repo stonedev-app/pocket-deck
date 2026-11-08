@@ -8,8 +8,9 @@
 
 namespace wav {
 
+/** @brief parse() が取り出した、再生に必要な WAV の情報 */
 struct Info {
-    uint32_t sampleRate;     // サンプルレート（Hz）
+    uint32_t sampleRate;     // サンプルレート [Hz]
     uint16_t channels;       // チャンネル数（1 か 2）
     uint16_t bitsPerSample;  // ビット幅（16）
     uint32_t dataOffset;     // data チャンクの中身の開始位置（ファイル先頭からのバイト数）

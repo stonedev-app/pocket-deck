@@ -14,17 +14,21 @@
 
 namespace player {
 
-// 再生が終わった理由。1 回の再生につき、タスクが終わるときに 1 件だけ送る
+/** @brief 再生が終わった理由。1 回の再生につき、タスクが終わるときに 1 件だけ送る */
 enum class EndReason : uint8_t {
     Finished,  // 最後まで再生した
     Stopped,   // stop() で止めた
     Failed,    // ファイルが開けない・読めないなどで続けられなかった
 };
 
-// キューの長さ。1 回の再生で 1 件しか出ず、受け取る側が毎回取り出すので 1 件でも足りるが、
-// 取り出しが遅れても溜められるように 4 にした。満杯のときは新しい通知を捨ててログに出す
-// （再生中に次の再生は始められないので、実際には満杯にならない）。
-// QueueSet の大きさを決める側が使う
+/**
+ * @brief 終了通知のキューの長さ
+ *
+ * 1 回の再生で 1 件しか出ず、受け取る側が毎回取り出すので 1 件でも足りるが、
+ * 取り出しが遅れても溜められるように 4 にした。満杯のときは新しい通知を捨ててログに出す
+ * （再生中に次の再生は始められないので、実際には満杯にならない）。
+ * QueueSet の大きさを決める側（ui.cpp）が合計に使う。
+ */
 constexpr int EVENT_QUEUE_LEN = 4;
 
 /**
@@ -34,7 +38,13 @@ constexpr int EVENT_QUEUE_LEN = 4;
  */
 bool begin();
 
-// 終了通知のキューのハンドル。QueueSet に入れて待つためのもの。begin() が成功する前は nullptr。
+/**
+ * @brief 終了通知のキューのハンドルを返す
+ *
+ * QueueSet に入れて待つためのもの。取り出しは receive() で行う。
+ *
+ * @return キューのハンドル。begin() が成功する前は nullptr
+ */
 QueueHandle_t eventQueue();
 
 /**
@@ -55,8 +65,13 @@ bool receive(EndReason &out, TickType_t timeout);
  */
 bool start(const char *path, const wav::Info &info);
 
-// 再生を止める。再生用のタスクが終わるまで待つ。再生中でなければ何もしない。
-// 止めた場合も Stopped の通知が届く（stop() から戻った時点でキューに入っている）。
+/**
+ * @brief 再生を止める。再生用のタスクが終わるまで待つ
+ *
+ * 再生中でなければ何もしない。止めた場合も Stopped の通知が届く
+ * （stop() から戻った時点でキューに入っている）。
+ * 待つ上限は player.cpp の STOP_WAIT_MS で、超えたらログに出して戻る。
+ */
 void stop();
 
 }  // namespace player

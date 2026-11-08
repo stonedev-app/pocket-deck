@@ -5,8 +5,12 @@
 
 namespace wav {
 
-static constexpr uint32_t FMT_MIN_SIZE = 16;  // fmt チャンクの基本部分のバイト数
+// fmt チャンクの基本部分のバイト数。PCM（タグ 1）ならこれで全部で、
+// 拡張部分（WAVE_FORMAT_EXTENSIBLE など）は使わないので読み飛ばす
+static constexpr uint32_t FMT_MIN_SIZE = 16;
 
+// WAV はリトルエンディアン固定。ESP32-S3 もリトルエンディアンだが、アラインされていない
+// バッファ上の値を安全に読むため、バイト単位で組み立てる
 static uint16_t le16(const uint8_t *p)
 {
     return (uint16_t)(p[0] | (p[1] << 8));
@@ -35,6 +39,8 @@ bool parse(const char *path, Info &out, char *err, size_t errSize)
     bool haveFmt = false;
     Info info = {};
 
+    // ファイルサイズは、壊れた（途中で切れた）ファイルのチャンクサイズを検出するために使う。
+    // サイズを信じて読み進めると、player が存在しないデータを再生しようとするため
     fseek(f, 0, SEEK_END);
     uint64_t fileSize = (uint64_t)ftell(f);
     fseek(f, 0, SEEK_SET);
