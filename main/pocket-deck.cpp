@@ -16,6 +16,14 @@ static void fail(const char *msg)
     ui::showError(msg);
 }
 
+/**
+ * @brief 起動時の入口。初期化とタスクの起動だけを行い、あとは画面のタスクに任せる
+ *
+ * 初期化の順序: M5.begin() → スピーカーと音量 → SD カード → キーボード → 再生 → 画面。
+ * 後ろのものは前のものに依存する（SPI は M5.begin() の後、音量はスピーカーの後、
+ * 画面は keyboard / player のキューができた後）。
+ * どれかが失敗したら fail() で画面とログに出して return する（以降のタスクは起動しない）。
+ */
 extern "C" void app_main(void)
 {
     M5.begin();
