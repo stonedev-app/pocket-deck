@@ -1,4 +1,4 @@
-#include "wav.hpp"
+#include "audio/wav.hpp"
 
 #include <stdio.h>
 #include <string.h>

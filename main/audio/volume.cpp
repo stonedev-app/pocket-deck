@@ -1,4 +1,4 @@
-#include "volume.hpp"
+#include "audio/volume.hpp"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h" // IWYU pragma: keep
