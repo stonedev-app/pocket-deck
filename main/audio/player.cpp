@@ -14,9 +14,14 @@ namespace player {
 
 static const char *TAG = "player";
 
+// playRaw は渡したバッファを再生が終わるまで参照し続け、内部のキューにはポインタしか積まない。
+// そのため、再生中のバッファを読み込みで上書きしないよう複数個を順番に使う。
+// 1 個 2048 要素（4KB）× 3 個で、SD の読み出しが多少遅れても音が途切れにくい長さを確保しつつ、
+// 内部 SRAM（PSRAM はない）を 12KB に抑える。音切れの有無は実機で調整する
 static constexpr int BUF_COUNT = 3;        // バッファの個数。順番に使う
 static constexpr size_t BUF_ELEMS = 2048;  // 1 個あたりの要素数（int16_t）
-static constexpr uint8_t CHANNEL = 0;      // playRaw に明示するチャンネル
+static constexpr uint8_t CHANNEL = 0;      // playRaw に明示するチャンネル。音量・停止も同じ番号で操作する
+// ファイル読み出しと playRaw の呼び出しだけなので 4KB で足りる。優先度は ui のタスクと同じ
 static constexpr uint32_t TASK_STACK = 4096;
 static constexpr UBaseType_t TASK_PRIORITY = 5;
 static constexpr int STOP_WAIT_MS = 2000;  // stop() がタスクの終了を待つ上限
@@ -42,6 +47,12 @@ static void notifyEnd(EndReason reason)
     }
 }
 
+/**
+ * @brief 再生用のタスク。1 回の再生ごとに start() が作り、終わると自分で削除する
+ *
+ * SD の読み出しは遅く、ui のタスクで行うとキー入力や描画が止まるので、専用のタスクに分けている。
+ * 終了の通知は、どの経路で終わっても最後に必ず 1 件だけ送る。
+ */
 static void playTask(void *)
 {
     EndReason reason = EndReason::Finished;
@@ -58,7 +69,7 @@ static void playTask(void *)
         int i = 0;
         while (remain > 0 && !stopReq) {
             size_t want = remain < BUF_ELEMS ? remain : BUF_ELEMS;
-            if (stereo) want &= ~(size_t)1;  // ステレオは偶数にそろえる
+            if (stereo) want &= ~(size_t)1;  // ステレオは L/R が対なので、チャンクの切れ目で片チャンネルだけにならないよう偶数にそろえる
             if (want == 0) break;
             size_t n = fread(buf[i], sizeof(int16_t), want, f);
             if (stereo) n &= ~(size_t)1;
@@ -111,6 +122,8 @@ bool receive(EndReason &out, TickType_t timeout)
 bool start(const char *path, const wav::Info &info)
 {
     if (running || !eventQ) return false;
+    // タスクを作る前に値を設定する。タスクは引数ではなくこれらの static 変数を読む
+    // （running を先に立てるのは、タスクが即座に動いても二重に start() されないようにするため）
     playPath = path;
     playInfo = info;
     stopReq = false;
@@ -127,7 +140,8 @@ void stop()
 {
     if (!running) return;
     stopReq = true;
-    // playRaw で待っているタスクを起こすために、キューを空にする
+    // playRaw は内部のキューに空きがないと待つ。タスクがそこで止まっていると stopReq を見られないので、
+    // 再生中のデータを捨ててキューを空け、タスクを起こす
     M5.Speaker.stop(CHANNEL);
     for (int waited = 0; running && waited < STOP_WAIT_MS; waited += POLL_MS) {
         vTaskDelay(POLL_TICKS);

@@ -9,24 +9,35 @@
 
 static const char *TAG = "pocket-deck";
 
-// 初期化の失敗は、ログと画面に出して終わる（タスクは起動しない）
+/** @brief 初期化の失敗を、ログと画面に出して終わる（タスクは起動しない） */
 static void fail(const char *msg)
 {
     ESP_LOGE(TAG, "init failed: %s", msg);
     ui::showError(msg);
 }
 
+/**
+ * @brief 起動時の入口。初期化とタスクの起動だけを行い、あとは画面のタスクに任せる
+ *
+ * 初期化の順序: M5.begin() → スピーカーと音量 → SD カード → キーボード → 再生 → 画面。
+ * 後ろのものは前のものに依存する（SPI は M5.begin() の後、音量はスピーカーの後、
+ * 画面は keyboard / player のキューができた後）。
+ * どれかが失敗したら fail() で画面とログに出して return する（以降のタスクは起動しない）。
+ */
 extern "C" void app_main(void)
 {
     M5.begin();
     ESP_LOGI(TAG, "display: %d x %d", (int)M5.Display.width(), (int)M5.Display.height());
 
-    // スピーカーの初期化と音量の設定は、起動時に 1 回だけ行う
+    // スピーカー（ES8311 コーデック。I2S は M5Unified が設定する）の初期化は、起動時に 1 回だけ行う。
+    // volume::begin() は M5.Speaker.begin() の後でないと音量が反映されない
     M5.Speaker.begin();
     volume::begin();
 
     // SPI バスの初期化は M5.begin() の後でなければならない（ディスプレイ用 SPI との衝突を避ける）
     M5.Display.setTextSize(2);
+    // 失敗しても app_main を return するだけ。この時点では画面のタスクがなく、
+    // M5.Display に直接出して終えるのが安全（fail() 参照）
     if (!sdcard::begin()) return fail("sdcard");
     if (!keyboard::begin()) return fail("keyboard");
     if (!player::begin()) return fail("player");

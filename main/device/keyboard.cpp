@@ -17,8 +17,10 @@ namespace keyboard {
 
 static const char *TAG = "keyboard";
 
+// TCA8418 は内部 I2C バス（SCL=GPIO9、SDA=GPIO8）につながっている。
+// このバスは M5Unified が M5.In_I2C として管理しているので、ここでは初期化せず借りて使う
 static constexpr uint8_t  TCA8418_ADDR    = 0x34;
-static constexpr uint32_t I2C_FREQ        = 400000;  // 400kHz
+static constexpr uint32_t I2C_FREQ        = 400000;  // 400kHz（TCA8418 の Fast mode）
 static constexpr uint8_t  REG_CFG         = 0x01;
 static constexpr uint8_t  REG_INT_STAT    = 0x02;
 static constexpr uint8_t  REG_KEY_LCK_EC  = 0x03;
@@ -30,7 +32,9 @@ static constexpr uint8_t  REG_KP_GPIO3    = 0x1F;
 static constexpr uint8_t  CFG_KE_IEN      = 0x01;  // キーイベントの割り込みを有効にする
 static constexpr uint8_t  INT_STAT_K_INT  = 0x01;  // キーイベントの割り込みフラグ
 
-// 物理キー配列の大きさ（TCA8418 側の 7 行 × 8 列とは別）
+// 物理キー配列の大きさ（TCA8418 側の 7 行 × 8 列とは別）。
+// 基板は 4 行 × 14 列のキーを、少ない配線で読むために 7 行 × 8 列に折り畳んで接続している。
+// handleEvent() でこの折り畳みを元に戻す
 static constexpr int ROWS = 4;
 static constexpr int COLS = 14;
 
@@ -55,10 +59,14 @@ static const uint8_t kShift[ROWS][COLS] = {
     {S_CTRL, S_OPT, S_ALT, 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', S_SPACE},
 };
 
+// I2C の読み書きとキューへの送信しかしないので、スタックは 4KB で足りる。
+// 優先度は ui のタスクと同じ。ISR の通知で起きたときだけ動くので CPU はほとんど使わない
 static constexpr uint32_t TASK_STACK_SIZE = 4096;
 static constexpr UBaseType_t TASK_PRIORITY = 5;
 static constexpr gpio_num_t INT_PIN = GPIO_NUM_11;  // TCA8418 の INT（Low アクティブ）
 static constexpr TickType_t FALLBACK_PERIOD = pdMS_TO_TICKS(100);  // 割り込みを取りこぼした場合の保険
+// INT が Low のままのとき scan() を繰り返す上限。読んでいる最中に連続でキーが来ても
+// 入力タスクが抜けられなくなるのを防ぐ（取り切れない分は保険の周期で拾う）
 static constexpr int MAX_RESCAN = 4;
 static QueueHandle_t s_queue = nullptr;
 static TaskHandle_t s_task = nullptr;
@@ -142,6 +150,7 @@ static void handleEvent(uint8_t raw)
         return;
     }
     // TCA8418 の座標から物理配列へ変換（4.3）
+    // キー番号は行ごとに 10 個（COL0〜9）
     const int rawRow = v / 10;
     const int rawCol = v % 10;
     const int col = rawRow * 2 + (rawCol > 3 ? 1 : 0);
@@ -276,7 +285,8 @@ bool begin()
         ESP_LOGE(TAG, "TCA8418 init failed");
         return false;
     }
-    // 起動前に溜まったイベントを捨て、割り込みフラグを全部消す
+    // 起動前に溜まったイベントを捨て、割り込みフラグを全部消す。
+    // INT が Low のまま残ると、立ち下がりエッジの割り込みが次から来なくなるため
     for (int i = 0; i < 16; i++) {  // FIFO は最大 10 件
         if (M5.In_I2C.readRegister8(TCA8418_ADDR, REG_KEY_EVENT_A, I2C_FREQ) == 0) {
             break;

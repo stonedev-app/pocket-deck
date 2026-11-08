@@ -9,17 +9,40 @@
 
 namespace sdcard {
 
-// 一覧に入れるファイル名の最大数。画面に 7 行しか入らないので、それを超える分は選べない
+/**
+ * @brief 一覧に入れるファイル名の最大数
+ *
+ * 画面（240x135、文字サイズ 2）には見出しを除いて 7 行しか入らず、スクロールも持たないので、
+ * それを超える分は選べない。ui.cpp の描画行数と対応している。
+ */
 constexpr int MAX_WAV_FILES = 7;
 
-// /sdcard にマウントする。失敗したときは、画面とログにエラーを出して false を返す。
+/**
+ * @brief SD カードを SPI モードで /sdcard にマウントする
+ *
+ * マウント済みなら何もせず true を返す。
+ * 失敗したときは、画面とログにエラーを出す（この時点では ui のタスクがなく、画面を使えるため）。
+ *
+ * @return マウントできたら true
+ */
 bool begin();
 
-// ルート直下の *.wav のファイル名を最大 MAX_WAV_FILES 件、names に入れる。見つけた総数はログに出す。
-// ディレクトリを開けないときは false を返す。
+/**
+ * @brief ルート直下の *.wav のファイル名を最大 MAX_WAV_FILES 件、names に入れる
+ *
+ * 見つけた総数はログに出す。サブディレクトリは辿らない。
+ *
+ * @param[out] names 取得したファイル名（パスは含まない）。呼び出しのたびに空にしてから入れる
+ * @return 成功で true。ディレクトリを開けないときは false
+ */
 bool listWav(std::vector<std::string> &names);
 
-// 一覧のファイル名から、ファイルのフルパスを作る。
+/**
+ * @brief 一覧のファイル名から、ファイルのフルパスを作る
+ *
+ * @param[in] name listWav() が返したファイル名
+ * @return "/sdcard/<name>"
+ */
 std::string wavPath(const std::string &name);
 
 }  // namespace sdcard

@@ -3,7 +3,10 @@
 // 音量（0〜16 の 17 段階）の管理。setVolume に渡す値は volume.cpp の表から引く。段階は NVS に保存し、起動時に復元する。
 namespace volume {
 
+/** @brief 音量の最大段階。0 を無音とした 17 段階 */
 constexpr int MAX_LEVEL = 16;
+
+/** @brief NVS に保存がない初回起動時の段階。最大では大きすぎるので、低めにしてある */
 constexpr int DEFAULT_LEVEL = 4;
 
 /** @brief NVS から段階を読んで M5.Speaker に反映する。失敗しても既定値で続ける。M5.Speaker.begin() の後に呼ぶ */

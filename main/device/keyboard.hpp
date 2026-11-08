@@ -12,8 +12,15 @@
 
 namespace keyboard {
 
-constexpr int QUEUE_SIZE = 16;  // キューの長さ。QueueSet の大きさを決める側が使う
+/**
+ * @brief イベントのキューの長さ
+ *
+ * 満杯のときは新しいイベントを捨てる。
+ * QueueSet の大きさを決める側（ui.cpp）が合計に使う。
+ */
+constexpr int QUEUE_SIZE = 16;
 
+/** @brief 押されたキーの種類。Fn 層の変換（Fn + ; で Up など）を適用した後の値 */
 enum class Key : uint8_t {
     Char,       // 文字キー。KeyEvent::ch に ASCII 文字が入る
     Enter,
@@ -26,13 +33,14 @@ enum class Key : uint8_t {
     Down,
     Left,
     Right,
-    Fn,         // 修飾キー自体
+    Fn,         // ここから下が修飾キー自体。isModifier() が key >= Key::Fn で判定するので並びを変えない
     Shift,
     Ctrl,
     Opt,
     Alt,
 };
 
+/** @brief KeyEvent::mods に入れる修飾キーのビット */
 enum : uint8_t {
     MOD_FN    = 1 << 0,
     MOD_SHIFT = 1 << 1,
@@ -41,6 +49,7 @@ enum : uint8_t {
     MOD_ALT   = 1 << 4,
 };
 
+/** @brief キーボードから届く 1 件の押下イベント。キューにコピーで入れるので、ポインタを含めない */
 struct KeyEvent {
     Key key;
     char ch;            // key == Key::Char のときの文字（Shift / Fn 適用済み）。それ以外は 0
