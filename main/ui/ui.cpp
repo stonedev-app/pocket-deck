@@ -53,7 +53,7 @@ static State state;
 // 長い名前は折り返して行数が増えるので、行頭の印（2 文字）を除いた長さで切る
 static constexpr int NAME_CHARS = 18;
 
-// 音量を「mute」または「level/max」で出して改行する。prefix は音量の前に出す文字列
+/** @brief 音量を「mute」または「level/max」で出して改行する。prefix は音量の前に出す文字列 */
 static void printVolume(const char *prefix)
 {
     if (volume::muted()) {
@@ -63,6 +63,7 @@ static void printVolume(const char *prefix)
     }
 }
 
+/** @brief 一覧画面。見出しに音量を出し、選んでいる行の頭に '>' を付ける */
 static void drawList()
 {
     M5.Display.fillScreen(TFT_BLACK);
@@ -80,7 +81,7 @@ static void drawList()
     }
 }
 
-// 結果画面。形式と、再生中か停止中かを出す（文字サイズ 2 で 8 行まで入る）
+/** @brief 結果画面。形式と、再生中か停止中かを出す（文字サイズ 2 で 8 行まで入る） */
 static void drawResult()
 {
     M5.Display.fillScreen(TFT_BLACK);
@@ -99,7 +100,7 @@ static void drawResult()
     printVolume("Vol: ");
 }
 
-// 選んだ WAV のヘッダを解析して、結果かエラーの理由を state に入れ、ログにも出す
+/** @brief 選んだ WAV のヘッダを解析して、結果かエラーの理由を state に入れ、ログにも出す */
 static void parseSelected()
 {
     State &st = state;
@@ -116,20 +117,25 @@ static void parseSelected()
              (unsigned)st.resultInfo.dataBytes);
 }
 
+/** @brief 今のモードの画面を描き直す。音量が変わったときに、表示へ反映するために使う */
 static void redraw()
 {
     if (state.mode == Mode::Result) drawResult(); else drawList();
 }
 
-// 再生を始める。成功したら表示を再生中にする
+/** @brief 再生を始める。成功したら表示を再生中にする */
 static void startPlayback()
 {
     state.resultPlaying =
         player::start(sdcard::wavPath(state.files[state.selected]).c_str(), state.resultInfo);
 }
 
-// 再生を止めて、表示を停止中にする。stop() で出た Stopped の通知はここで捨てる。
-// 残すと、すぐ再生し直したときに古い通知で新しい再生が止まったことになってしまう
+/**
+ * @brief 再生を止めて、表示を停止中にする
+ *
+ * stop() で出た Stopped の通知はここで捨てる。
+ * 残すと、すぐ再生し直したときに古い通知で新しい再生が止まったことになってしまう。
+ */
 static void stopPlayback()
 {
     player::stop();
@@ -138,8 +144,12 @@ static void stopPlayback()
     state.resultPlaying = false;
 }
 
-// 再生の終了通知を受けたときの処理。Esc で結果画面を抜けた後に届いた通知で、
-// 一覧画面を結果画面で描き潰さないよう、結果画面で再生中のときだけ描き直す
+/**
+ * @brief 再生の終了通知を受けたときの処理
+ *
+ * Esc で結果画面を抜けた後に届いた通知で、一覧画面を結果画面で描き潰さないよう、
+ * 結果画面で再生中のときだけ描き直す。
+ */
 static void handleEnd(player::EndReason reason)
 {
     ESP_LOGI(TAG, "playback end: %d", (int)reason);
@@ -149,6 +159,13 @@ static void handleEnd(player::EndReason reason)
     }
 }
 
+/**
+ * @brief キー 1 件を処理する
+ *
+ * Fn + A / S / D の音量操作はモードに関係なく最初に扱い、残りはモードごとに分ける。
+ * - 一覧: j / Down で下、k / Up で上、Enter で選んだ WAV を解析して結果画面へ
+ * - 結果: Enter で再生と停止の切り替え（解析に失敗しているときは効かない）、Esc で止めて一覧へ戻る
+ */
 static void handleKey(const keyboard::KeyEvent &ev)
 {
     State &st = state;
@@ -192,6 +209,7 @@ static void handleKey(const keyboard::KeyEvent &ev)
     }
 }
 
+/** @brief 押されたキーと修飾キーをログに出す（画面は WAV 一覧に使うので、画面には出さない） */
 static void showKey(const keyboard::KeyEvent &ev)
 {
     char mods[24] = "";
@@ -205,8 +223,12 @@ static void showKey(const keyboard::KeyEvent &ev)
     ESP_LOGI(TAG, "key: %s (mods: %s)", ev.name, mods[0] ? mods : "-");
 }
 
-// 画面のタスク。キー入力と再生の終了通知を QueueSet で 1 か所に集めて待つ。
-// 描画と state の更新をこのタスクだけに集めることで、排他制御なしにしている
+/**
+ * @brief 画面のタスク
+ *
+ * キー入力と再生の終了通知を QueueSet で 1 か所に集めて待つ。
+ * 描画と state の更新をこのタスクだけに集めることで、排他制御なしにしている。
+ */
 static void screenTask(void *arg)
 {
     QueueSetHandle_t set = static_cast<QueueSetHandle_t>(arg);

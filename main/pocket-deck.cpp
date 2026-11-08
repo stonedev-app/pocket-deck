@@ -9,7 +9,7 @@
 
 static const char *TAG = "pocket-deck";
 
-// 初期化の失敗は、ログと画面に出して終わる（タスクは起動しない）
+/** @brief 初期化の失敗を、ログと画面に出して終わる（タスクは起動しない） */
 static void fail(const char *msg)
 {
     ESP_LOGE(TAG, "init failed: %s", msg);

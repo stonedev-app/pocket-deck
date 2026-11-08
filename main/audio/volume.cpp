@@ -38,6 +38,12 @@ static void apply()
     M5.Speaker.setVolume(v);
 }
 
+/**
+ * @brief NVS を初期化し、保存済みの段階があれば s_level に読み込む
+ *
+ * 保存がない・読めないときは s_level を変えず、既定値のまま続ける。
+ * NVS の初期化に失敗すると s_nvsReady が false のままになり、save() は何もしない。
+ */
 static void load()
 {
     // NVS の初期化はこのモジュールが担当する（他に NVS を使う所がないため）。
@@ -72,6 +78,7 @@ static void load()
     }
 }
 
+/** @brief 現在の段階 s_level を NVS に書き込む。NVS が使えないとき（s_nvsReady が false）は何もしない */
 static void save()
 {
     if (!s_nvsReady) return;
@@ -91,7 +98,11 @@ static void save()
     }
 }
 
-// タイマータスクで動く。s_level を読むだけにする（NVS 書き込みのブロックはタイマータスクだけが受ける）
+/**
+ * @brief 保存タイマーが切れたときに save() を呼ぶ
+ *
+ * タイマータスクで動く。s_level を読むだけにする（NVS 書き込みのブロックはタイマータスクだけが受ける）。
+ */
 static void onSaveTimer(TimerHandle_t)
 {
     save();

@@ -24,6 +24,11 @@ static constexpr const char *MOUNT_POINT = "/sdcard";
 
 static bool mounted = false;
 
+/**
+ * @brief SPI バスを初期化して SD カードを MOUNT_POINT にマウントする
+ *
+ * 失敗したときは画面とログにエラーを出し、初期化した SPI バスを解放して false を返す。
+ */
 static bool mount()
 {
     // SD カードは SDMMC ではなく SPI モードで配線されているので、SDSPI ホストを使う
@@ -73,8 +78,11 @@ static bool mount()
     return true;
 }
 
-// ファイルの拡張子が .wav（大文字小文字を区別しない）か。
-// macOS がコピー時に作る隠しファイル（._ で始まる名前）は音声ではないので除く
+/**
+ * @brief ファイルの拡張子が .wav（大文字小文字を区別しない）か
+ *
+ * macOS がコピー時に作る隠しファイル（._ で始まる名前）は音声ではないので除く。
+ */
 static bool isWav(const struct dirent *ent)
 {
     if (ent->d_type == DT_DIR) return false;
