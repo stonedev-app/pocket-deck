@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "freertos/FreeRTOS.h"
+#include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 
 // ミリ秒を tick に変換する。ms > 0 のときは必ず 1 tick 以上を返す。
 //
