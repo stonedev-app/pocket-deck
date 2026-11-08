@@ -1,0 +1,13 @@
+# パーティションテーブル（フラッシュ 8MB 前提）
+#
+# 理由:
+# - 実機（ESP32-S3FN8）のフラッシュは 8MB（docs/cardputer-adv-peripherals.md 参照）。
+#   既定の SINGLE_APP はアプリ 1MB で、LVGL や日本語フォントを入れる余地がないため、
+#   factory アプリを 3MB に広げる。
+# - nvs は音量の保存に使うので残す。phy_init も残す。
+# - 3MB 以降（0x310000〜8MB 末尾）は未使用。将来、OTA やデータ領域に使う。
+#
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x6000,
+phy_init, data, phy,     0xf000,   0x1000,
+factory,  app,  factory, 0x10000,  0x300000,
