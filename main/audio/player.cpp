@@ -10,6 +10,8 @@
 #include "freertos/task.h"
 #include <M5Unified.hpp>
 
+#include "util/ticks.hpp"
+
 namespace player {
 
 static const char *TAG = "player";
@@ -28,7 +30,7 @@ static constexpr int STOP_WAIT_MS = 2000;  // stop() がタスクの終了を待
 // 待ちループの刻み。CONFIG_FREERTOS_HZ=100（1 tick = 10ms）では 5ms が 0 tick になり、
 // vTaskDelay(0) では IDLE が走れずウォッチドッグが発火するため、必ず 1 tick 以上にする
 static constexpr int POLL_MS = 20;
-static constexpr TickType_t POLL_TICKS = pdMS_TO_TICKS(POLL_MS) > 0 ? pdMS_TO_TICKS(POLL_MS) : 1;
+static constexpr TickType_t POLL_TICKS = msToTicks(POLL_MS);
 
 // 内部 SRAM に静的に取る（PSRAM はない）。再生が終わるまで書き換えない・解放しない
 static int16_t buf[BUF_COUNT][BUF_ELEMS];

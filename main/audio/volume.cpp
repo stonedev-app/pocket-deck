@@ -8,6 +8,8 @@
 #include "nvs_flash.h"
 #include <M5Unified.hpp>
 
+#include "util/ticks.hpp"
+
 namespace volume {
 
 static const char *TAG = "volume";
@@ -16,7 +18,7 @@ static constexpr const char *NVS_NAMESPACE = "pocket-deck";
 static constexpr const char *NVS_KEY = "vol";
 // 最後の変更から書き込みまで。キーを連打するたびに書くとフラッシュの書き込み回数（寿命）を
 // 消費し、書き込み中は他の NVS アクセスもブロックされるので、操作が落ち着いてから 1 回だけ書く
-static constexpr TickType_t SAVE_DELAY = pdMS_TO_TICKS(1000);  // [ms]
+static constexpr TickType_t SAVE_DELAY = msToTicks(1000);  // [ms]
 
 static int s_level = DEFAULT_LEVEL;
 static bool s_muted = false;
