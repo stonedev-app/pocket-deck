@@ -4,7 +4,7 @@
 
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/queue.h"
-#include "wav.hpp"
+#include "audio/wav.hpp"
 
 // WAV（16bit PCM）の再生。M5.Speaker に playRaw でチャンクを渡す。画面表示には依存しない。
 // 使い方: M5.Speaker.begin() を起動時に 1 回呼んでおく。start() が再生用のタスクを作り、

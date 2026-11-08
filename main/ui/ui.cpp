@@ -1,4 +1,4 @@
-#include "ui.hpp"
+#include "ui/ui.hpp"
 
 #include <string.h>
 
@@ -12,11 +12,11 @@
 #include "freertos/task.h"
 #include <M5Unified.hpp>
 
-#include "keyboard.hpp"
-#include "player.hpp"
-#include "sdcard.hpp"
-#include "volume.hpp"
-#include "wav.hpp"
+#include "audio/player.hpp"
+#include "audio/volume.hpp"
+#include "audio/wav.hpp"
+#include "device/keyboard.hpp"
+#include "device/sdcard.hpp"
 
 namespace ui {
 

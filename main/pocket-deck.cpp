@@ -1,11 +1,11 @@
 #include "esp_log.h"
 #include <M5Unified.hpp>
 
-#include "keyboard.hpp"
-#include "player.hpp"
-#include "sdcard.hpp"
-#include "ui.hpp"
-#include "volume.hpp"
+#include "audio/player.hpp"
+#include "audio/volume.hpp"
+#include "device/keyboard.hpp"
+#include "device/sdcard.hpp"
+#include "ui/ui.hpp"
 
 static const char *TAG = "pocket-deck";
 
