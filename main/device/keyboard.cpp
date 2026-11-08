@@ -10,6 +10,8 @@
 #include "esp_log.h"
 #include <M5Unified.hpp>
 
+#include "util/ticks.hpp"
+
 // TCA8418 のレジスタ配置とキー配列は docs/cardputer-adv-peripherals.md の 4 章に基づく。
 // ライセンスの都合（4.8）で、GPLv3 表記のある keymap.h は使わず、配列は自前で定義している。
 
@@ -64,7 +66,7 @@ static const uint8_t kShift[ROWS][COLS] = {
 static constexpr uint32_t TASK_STACK_SIZE = 4096;
 static constexpr UBaseType_t TASK_PRIORITY = 5;
 static constexpr gpio_num_t INT_PIN = GPIO_NUM_11;  // TCA8418 の INT（Low アクティブ）
-static constexpr TickType_t FALLBACK_PERIOD = pdMS_TO_TICKS(100);  // 割り込みを取りこぼした場合の保険
+static constexpr TickType_t FALLBACK_PERIOD = msToTicks(100);  // 割り込みを取りこぼした場合の保険
 // INT が Low のままのとき scan() を繰り返す上限。読んでいる最中に連続でキーが来ても
 // 入力タスクが抜けられなくなるのを防ぐ（取り切れない分は保険の周期で拾う）
 static constexpr int MAX_RESCAN = 4;
