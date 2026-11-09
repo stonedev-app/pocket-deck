@@ -112,10 +112,7 @@ bool listWav(std::vector<std::string> &names)
     while ((ent = readdir(dir)) != nullptr) {
         if (!isWav(ent)) continue;
         ESP_LOGI(TAG, "wav: %s", ent->d_name);
-        // 選べるのは先頭の MAX_WAV_FILES 件だけ。残りはログだけに出す
-        if (count < MAX_WAV_FILES) {
-            names.push_back(ent->d_name);
-        }
+        names.push_back(ent->d_name);
         count++;
     }
     closedir(dir);

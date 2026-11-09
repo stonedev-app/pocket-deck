@@ -49,10 +49,6 @@ struct State {
 
 static State state;
 
-// 画面は 240x135。文字サイズ 2（12x16）で 1 行 20 文字、見出し 1 行を除いて 7 行入る。
-// 長い名前は折り返して行数が増えるので、行頭の印（2 文字）を除いた長さで切る
-static constexpr int NAME_CHARS = 18;
-
 /** @brief 音量を「mute」または「level/max」で出して改行する。prefix は音量の前に出す文字列 */
 static void printVolume(const char *prefix)
 {
@@ -63,22 +59,10 @@ static void printVolume(const char *prefix)
     }
 }
 
-/** @brief 一覧画面。見出しに音量を出し、選んでいる行の頭に '>' を付ける */
+/** @brief 一覧の画面は file_list（LVGL）が出すので、ここでは画面を消すだけ */
 static void drawList()
 {
     M5.Display.fillScreen(TFT_BLACK);
-    M5.Display.setCursor(0, 0);
-    M5.Display.setTextSize(2);
-
-    printVolume("WAV files:  Vol ");
-    if (state.files.empty()) {
-        M5.Display.println("(none)");
-        return;
-    }
-    for (int i = 0; i < (int)state.files.size(); i++) {
-        M5.Display.printf("%c %.*s\n", i == state.selected ? '>' : ' ', NAME_CHARS,
-                          state.files[i].c_str());
-    }
 }
 
 /** @brief 結果画面。形式と、再生中か停止中かを出す（文字サイズ 2 で 8 行まで入る） */
@@ -163,7 +147,7 @@ static void handleEnd(player::EndReason reason)
  * @brief キー 1 件を処理する
  *
  * Fn + A / S / D の音量操作はモードに関係なく最初に扱い、残りはモードごとに分ける。
- * - 一覧: j / Down で下、k / Up で上、Enter で選んだ WAV を解析して結果画面へ
+ * - 一覧: Enter で選んだ WAV を解析して結果画面へ（選択の移動は file_list が行う）
  * - 結果: Enter で再生と停止の切り替え（解析に失敗しているときは効かない）、Esc で止めて一覧へ戻る
  */
 static void handleKey(const keyboard::KeyEvent &ev)
@@ -193,15 +177,8 @@ static void handleKey(const keyboard::KeyEvent &ev)
     }
     if (st.files.empty()) return;
 
-    bool down = ev.key == keyboard::Key::Down || (ev.key == keyboard::Key::Char && ev.ch == 'j');
-    bool up   = ev.key == keyboard::Key::Up || (ev.key == keyboard::Key::Char && ev.ch == 'k');
-    if (down && st.selected < (int)st.files.size() - 1) {
-        st.selected++;
-        drawList();
-    } else if (up && st.selected > 0) {
-        st.selected--;
-        drawList();
-    } else if (ev.key == keyboard::Key::Enter) {
+    // 一覧の選択の移動は file_list（LVGL）が行うので、ここでは Enter だけ扱う
+    if (ev.key == keyboard::Key::Enter) {
         st.mode = Mode::Result;
         st.resultPlaying = false;
         parseSelected();
