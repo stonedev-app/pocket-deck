@@ -1,6 +1,7 @@
 #include "device/sdcard.hpp"
 
 #include <dirent.h>
+#include <algorithm>
 #include <string.h>
 #include <strings.h>
 
@@ -116,6 +117,13 @@ bool listWav(std::vector<std::string> &names)
         count++;
     }
     closedir(dir);
+
+    // 大文字小文字を区別せず昇順。同じならバイト順で決める（順序を毎回同じにするため）
+    std::sort(names.begin(), names.end(), [](const std::string &a, const std::string &b) {
+        int c = strcasecmp(a.c_str(), b.c_str());
+        if (c != 0) return c < 0;
+        return strcmp(a.c_str(), b.c_str()) < 0;
+    });
 
     ESP_LOGI(TAG, "wav files: %d", count);
     return true;
