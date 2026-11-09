@@ -10,14 +10,6 @@
 namespace sdcard {
 
 /**
- * @brief 一覧に入れるファイル名の最大数
- *
- * 画面（240x135、文字サイズ 2）には見出しを除いて 7 行しか入らず、スクロールも持たないので、
- * それを超える分は選べない。ui.cpp の描画行数と対応している。
- */
-constexpr int MAX_WAV_FILES = 7;
-
-/**
  * @brief SD カードを SPI モードで /sdcard にマウントする
  *
  * マウント済みなら何もせず true を返す。
@@ -28,7 +20,7 @@ constexpr int MAX_WAV_FILES = 7;
 bool begin();
 
 /**
- * @brief ルート直下の *.wav のファイル名を最大 MAX_WAV_FILES 件、names に入れる
+ * @brief ルート直下の *.wav のファイル名をすべて names に入れる
  *
  * 見つけた総数はログに出す。サブディレクトリは辿らない。
  *

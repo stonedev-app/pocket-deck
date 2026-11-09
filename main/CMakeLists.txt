@@ -1,3 +1,3 @@
-idf_component_register(SRCS "pocket-deck.cpp" "device/keyboard.cpp" "device/sdcard.cpp" "audio/wav.cpp" "audio/player.cpp" "audio/volume.cpp" "ui/ui.cpp" "ui/lvgl_port.cpp" "ui/status_bar.cpp"
+idf_component_register(SRCS "pocket-deck.cpp" "device/keyboard.cpp" "device/sdcard.cpp" "audio/wav.cpp" "audio/player.cpp" "audio/volume.cpp" "ui/ui.cpp" "ui/lvgl_port.cpp" "ui/status_bar.cpp" "ui/file_list.cpp"
                     INCLUDE_DIRS "."
                     PRIV_REQUIRES nvs_flash fatfs sdmmc esp_driver_sdspi esp_driver_spi driver esp_timer)

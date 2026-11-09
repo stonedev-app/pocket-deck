@@ -5,6 +5,7 @@
 #include "audio/volume.hpp"
 #include "device/keyboard.hpp"
 #include "device/sdcard.hpp"
+#include "ui/file_list.hpp"
 #include "ui/lvgl_port.hpp"
 #include "ui/status_bar.hpp"
 #include "ui/ui.hpp"
@@ -31,27 +32,31 @@ static void displayFlush(int32_t x, int32_t y, int32_t w, int32_t h, const uint1
 }
 
 /**
- * @brief keyboard のイベントを lvgl_port の操作に変換して 1 件取り出す（lvgl_port に渡す関数）
+ * @brief Fn + A / S / D の音量操作を処理する（帯は volume:: の状態を見て描き直す）
  *
- * Fn + A / S / D の音量操作は、ここで処理する（帯は volume:: の状態を見て描き直す）。
- * 選択の移動は、上下キーと vim 風の j / k。待たずに戻る。
+ * @return 音量のキーで、処理したら true
  */
-static bool pollKey(lvgl_port::Key &out)
+static bool handleVolumeKey(const keyboard::KeyEvent &ev)
 {
-    using keyboard::Key;
-    keyboard::KeyEvent ev;
-    if (!keyboard::poll(ev, 0)) return false;
-
     // Fn + A / S / D は、Key::Char の大文字 'A' / 'S' / 'D' に MOD_FN が付いたイベントになる。
     // Shift + A などは MOD_FN が付かないので区別できる
-    if (ev.key == Key::Char && (ev.mods & keyboard::MOD_FN) &&
-        (ev.ch == 'A' || ev.ch == 'S' || ev.ch == 'D')) {
-        if (ev.ch == 'A') volume::up();
-        else if (ev.ch == 'S') volume::down();
-        else volume::toggleMute();
-        return false;
+    if (ev.key != keyboard::Key::Char || !(ev.mods & keyboard::MOD_FN)) return false;
+    switch (ev.ch) {
+    case 'A': volume::up();         return true;
+    case 'S': volume::down();       return true;
+    case 'D': volume::toggleMute(); return true;
+    default:                        return false;
     }
+}
 
+/**
+ * @brief keyboard のイベントを lvgl_port の操作に変換する。変換できるキーでなければ false
+ *
+ * 選択の移動は、上下キーと vim 風の j / k。
+ */
+static bool toLvglKey(const keyboard::KeyEvent &ev, lvgl_port::Key &out)
+{
+    using keyboard::Key;
     switch (ev.key) {
     case Key::Down:  out = lvgl_port::Key::Next;  return true;
     case Key::Up:    out = lvgl_port::Key::Prev;  return true;
@@ -64,6 +69,26 @@ static bool pollKey(lvgl_port::Key &out)
     default:
         return false;
     }
+}
+
+/**
+ * @brief キーを 1 件取り出す（lvgl_port に渡す関数）。待たずに戻る
+ *
+ * 音量のキーは lvgl_port には渡さず、ここで処理する。残りは toLvglKey() で変換するだけ。
+ */
+static bool pollKey(lvgl_port::Key &out)
+{
+    keyboard::KeyEvent ev;
+    if (!keyboard::poll(ev, 0)) return false;
+    if (handleVolumeKey(ev)) return false;
+    return toLvglKey(ev, out);
+}
+
+/** @brief 画面の部品を作る（帯と、その下の一覧） */
+static void buildUi()
+{
+    status_bar::create();
+    file_list::create();
 }
 
 /**
@@ -94,8 +119,7 @@ extern "C" void app_main(void)
 
     // 初期化がすべて成功してから、LVGL を起動する（帯を作って LVGL のタスクを動かす）。
     // ui::start() は残してあるが、どちらも M5.Display に描くので同時には動かせない
-    if (!lvgl_port::start(M5.Display.width(), M5.Display.height(), displayFlush, pollKey,
-                          status_bar::create)) {
+    if (!lvgl_port::start(M5.Display.width(), M5.Display.height(), displayFlush, pollKey, buildUi)) {
         return fail("lvgl");
     }
 }
