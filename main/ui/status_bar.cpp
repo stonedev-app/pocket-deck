@@ -24,6 +24,7 @@ static constexpr int BATTERY_DUMMY_PERCENT = 70;
 static constexpr uint32_t POLL_MS = 50;
 
 static lv_obj_t *s_volumeIcon = nullptr;
+static lv_obj_t *s_volumeLabel = nullptr;
 // 描画に使う音量の状態。LVGL のタスクの中だけで読み書きする
 static int s_level = 0;
 static bool s_muted = false;
@@ -104,6 +105,13 @@ static void drawVolume(lv_event_t *e)
     }
 }
 
+/** @brief 音量の数字（0〜16）を更新する。消音のときは数字を残して、スピーカーと同じ暗い灰色にする */
+static void updateLabel()
+{
+    lv_label_set_text_fmt(s_volumeLabel, "%d", s_level);
+    lv_obj_set_style_text_color(s_volumeLabel, s_muted ? lv_color_make(0x60, 0x60, 0x60) : lv_color_white(), 0);
+}
+
 /** @brief 音量の状態を見て、変わっていたらアイコンを描き直す（LVGL のタスクで周期的に呼ばれる） */
 static void pollVolume(lv_timer_t *)
 {
@@ -113,6 +121,7 @@ static void pollVolume(lv_timer_t *)
     s_level = level;
     s_muted = muted;
     lv_obj_invalidate(s_volumeIcon);
+    updateLabel();
 }
 
 /** @brief 飾りのない箱を作る（既定のテーマの枠・余白・スクロールを外す） */
@@ -166,6 +175,11 @@ void create()
 
     s_level = volume::level();
     s_muted = volume::muted();
+    // 音量の数字（スピーカーの左）
+    s_volumeLabel = lv_label_create(bar);
+    lv_obj_set_style_text_font(s_volumeLabel, &lv_font_montserrat_12, 0);
+    updateLabel();
+
     s_volumeIcon = createBox(bar, ICON_W, ICON_H);
     lv_obj_add_event_cb(s_volumeIcon, drawVolume, LV_EVENT_DRAW_MAIN, nullptr);
 
