@@ -25,6 +25,10 @@ enum class Key : uint8_t {
     Prev,   // 前の項目へ選択を移す
     Enter,  // 選んだ項目を決定する
     Esc,    // 戻る
+    PlayPause,  // 一時停止 / 再開（停止中は最初から再生）
+    NextTrack,  // 次の曲
+    PrevTrack,  // 前の曲
+    Repeat,     // 1 曲リピートの切り替え
 };
 
 /**

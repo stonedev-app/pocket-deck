@@ -66,6 +66,23 @@ bool receive(EndReason &out, TickType_t timeout);
 bool start(const char *path, const wav::Info &info);
 
 /**
+ * @brief 再生を一時停止する。再生用のタスクを止め、読み出し位置を覚える
+ *
+ * 止めるときの終了通知は Stopped で、stop() と同じく戻った時点でキューに入っている
+ * （呼び出し側で必要に応じて捨てる）。positionMs() は止めた位置のまま動かない。
+ *
+ * @return 再生中で、止められたら true
+ */
+bool pause();
+
+/**
+ * @brief pause() で止めた位置から再生を続ける。一時停止中でなければ何もしない
+ *
+ * @return タスクを作れたら true
+ */
+bool resume();
+
+/**
  * @brief WAV 全体の長さ [ms] を、wav::Info から出す
  */
 uint32_t durationMs(const wav::Info &info);
