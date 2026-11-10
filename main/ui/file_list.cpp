@@ -6,6 +6,7 @@
 #include "device/sdcard.hpp"
 #include "esp_log.h"
 #include "lvgl.h"
+#include "ui/now_playing.hpp"
 #include "ui/status_bar.hpp"
 
 namespace file_list {
@@ -17,12 +18,23 @@ static constexpr int ROW_H = 20;
 
 static std::vector<std::string> s_files;
 
-/** @brief Enter（クリック）された行の名前をログに出す */
+static lv_obj_t *s_list = nullptr;
+
+/** @brief Enter（クリック）された行の曲を再生し、再生中の画面に移る */
 static void onClicked(lv_event_t *e)
 {
     lv_obj_t *btn = lv_event_get_target_obj(e);
     lv_obj_t *list = lv_obj_get_parent(btn);
-    ESP_LOGI(TAG, "enter: %s", lv_list_get_button_text(list, btn));
+    const char *name = lv_list_get_button_text(list, btn);
+    ESP_LOGI(TAG, "enter: %s", name);
+    now_playing::open(name);
+}
+
+void setVisible(bool visible)
+{
+    if (!s_list) return;
+    if (visible) lv_obj_remove_flag(s_list, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(s_list, LV_OBJ_FLAG_HIDDEN);
 }
 
 void create()
@@ -30,6 +42,7 @@ void create()
     if (!sdcard::listWav(s_files)) s_files.clear();
 
     lv_obj_t *list = lv_list_create(lv_screen_active());
+    s_list = list;
     lv_obj_set_size(list, LV_PCT(100), lv_display_get_vertical_resolution(nullptr) - status_bar::HEIGHT);
     lv_obj_align(list, LV_ALIGN_TOP_LEFT, 0, status_bar::HEIGHT);
     // 既定のテーマの枠・余白・角丸を外し、黒地にする

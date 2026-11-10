@@ -39,6 +39,7 @@ static std::string playPath;
 static wav::Info playInfo;
 static volatile bool running = false;  // 再生用のタスクが動いている間 true
 static volatile bool stopReq = false;  // stop() からタスクへの停止の要求
+static volatile uint32_t playedBytes = 0;  // playRaw に渡したバイト数。再生位置の目安
 static QueueHandle_t eventQ = nullptr;  // 終了通知のキュー
 
 /** @brief 終了通知をキューへ入れる。満杯なら捨てる */
@@ -84,6 +85,7 @@ static void playTask(void *)
             M5.Speaker.playRaw(buf[i], n, playInfo.sampleRate, stereo, 1, CHANNEL);
             i = (i + 1) % BUF_COUNT;
             remain -= n;
+            playedBytes = playedBytes + (uint32_t)(n * sizeof(int16_t));
         }
         // 最後まで読んだら、鳴り終わるまで待つ
         while (M5.Speaker.isPlaying(CHANNEL) && !stopReq) vTaskDelay(POLL_TICKS);
@@ -129,6 +131,7 @@ bool start(const char *path, const wav::Info &info)
     playPath = path;
     playInfo = info;
     stopReq = false;
+    playedBytes = 0;
     running = true;
     if (xTaskCreate(playTask, "player", TASK_STACK, NULL, TASK_PRIORITY, NULL) != pdPASS) {
         ESP_LOGE(TAG, "task create failed");
@@ -136,6 +139,22 @@ bool start(const char *path, const wav::Info &info)
         return false;
     }
     return true;
+}
+
+uint32_t durationMs(const wav::Info &info)
+{
+    const uint64_t bytesPerSec = (uint64_t)info.sampleRate * info.channels * sizeof(int16_t);
+    if (bytesPerSec == 0) return 0;
+    return (uint32_t)((uint64_t)info.dataBytes * 1000 / bytesPerSec);
+}
+
+uint32_t positionMs()
+{
+    const uint64_t bytesPerSec = (uint64_t)playInfo.sampleRate * playInfo.channels * sizeof(int16_t);
+    if (bytesPerSec == 0) return 0;
+    uint64_t bytes = playedBytes;
+    if (bytes > playInfo.dataBytes) bytes = playInfo.dataBytes;
+    return (uint32_t)(bytes * 1000 / bytesPerSec);
 }
 
 void stop()
