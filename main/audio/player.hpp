@@ -66,6 +66,19 @@ bool receive(EndReason &out, TickType_t timeout);
 bool start(const char *path, const wav::Info &info);
 
 /**
+ * @brief WAV 全体の長さ [ms] を、wav::Info から出す
+ */
+uint32_t durationMs(const wav::Info &info);
+
+/**
+ * @brief 直近に start() した再生の位置 [ms] を返す
+ *
+ * playRaw に渡したバイト数で数えるので、実際の音より最大でバッファ数個分（約 0.1 秒）進む。
+ * start() の前は 0。どのタスクから呼んでもよい。
+ */
+uint32_t positionMs();
+
+/**
  * @brief 再生を止める。再生用のタスクが終わるまで待つ
  *
  * 再生中でなければ何もしない。止めた場合も Stopped の通知が届く
