@@ -63,9 +63,15 @@ static bool toLvglKey(const keyboard::KeyEvent &ev, lvgl_port::Key &out)
     case Key::Up:    out = lvgl_port::Key::Prev;  return true;
     case Key::Enter: out = lvgl_port::Key::Enter; return true;
     case Key::Esc:   out = lvgl_port::Key::Esc;   return true;
+    case Key::Space: out = lvgl_port::Key::PlayPause; return true;
+    case Key::Right: out = lvgl_port::Key::NextTrack; return true;
+    case Key::Left:  out = lvgl_port::Key::PrevTrack; return true;
     case Key::Char:
         if (ev.ch == 'j') { out = lvgl_port::Key::Next; return true; }
         if (ev.ch == 'k') { out = lvgl_port::Key::Prev; return true; }
+        if (ev.ch == 'l') { out = lvgl_port::Key::NextTrack; return true; }
+        if (ev.ch == 'h') { out = lvgl_port::Key::PrevTrack; return true; }
+        if (ev.ch == 'r') { out = lvgl_port::Key::Repeat; return true; }
         return false;
     default:
         return false;

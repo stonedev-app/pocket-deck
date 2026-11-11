@@ -30,6 +30,32 @@ static void onClicked(lv_event_t *e)
     now_playing::open(name);
 }
 
+int count()
+{
+    return (int)s_files.size();
+}
+
+const char *nameAt(int index)
+{
+    if (index < 0 || index >= (int)s_files.size()) return nullptr;
+    return s_files[index].c_str();
+}
+
+int indexOf(const char *name)
+{
+    for (int i = 0; i < (int)s_files.size(); i++) {
+        if (s_files[i] == name) return i;
+    }
+    return -1;
+}
+
+lv_obj_t *rowAt(int index)
+{
+    // 0 件のときは子が「(none)」のラベルだけなので、行はない
+    if (!s_list || index < 0 || index >= (int)s_files.size()) return nullptr;
+    return lv_obj_get_child(s_list, index);
+}
+
 void setVisible(bool visible)
 {
     if (!s_list) return;

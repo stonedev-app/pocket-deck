@@ -39,7 +39,9 @@ static std::string playPath;
 static wav::Info playInfo;
 static volatile bool running = false;  // 再生用のタスクが動いている間 true
 static volatile bool stopReq = false;  // stop() からタスクへの停止の要求
-static volatile uint32_t playedBytes = 0;  // playRaw に渡したバイト数。再生位置の目安
+static volatile uint32_t playedBytes = 0;  // playRaw に渡したバイト数（data の先頭から）。再生位置の目安
+static uint32_t startOffset = 0;           // タスクが読み始める data 内の位置 [byte]。再開で 0 以外になる
+static bool paused = false;                // pause() で止めていて、resume() で続けられる間 true
 static QueueHandle_t eventQ = nullptr;  // 終了通知のキュー
 
 /** @brief 終了通知をキューへ入れる。満杯なら捨てる */
@@ -63,12 +65,12 @@ static void playTask(void *)
     if (!f) {
         ESP_LOGE(TAG, "cannot open: %s", playPath.c_str());
         reason = EndReason::Failed;
-    } else if (fseek(f, (long)playInfo.dataOffset, SEEK_SET) != 0) {
+    } else if (fseek(f, (long)(playInfo.dataOffset + startOffset), SEEK_SET) != 0) {
         ESP_LOGE(TAG, "seek failed");
         reason = EndReason::Failed;
     } else {
         bool stereo = playInfo.channels == 2;
-        size_t remain = playInfo.dataBytes / sizeof(int16_t);  // 残りの要素数
+        size_t remain = (playInfo.dataBytes - startOffset) / sizeof(int16_t);  // 残りの要素数
         int i = 0;
         while (remain > 0 && !stopReq) {
             size_t want = remain < BUF_ELEMS ? remain : BUF_ELEMS;
@@ -123,15 +125,16 @@ bool receive(EndReason &out, TickType_t timeout)
     return xQueueReceive(eventQ, &out, timeout) == pdTRUE;
 }
 
-bool start(const char *path, const wav::Info &info)
+/** @brief offset（data 内の位置 [byte]）から読むタスクを作る。playPath / playInfo は設定済みであること */
+static bool launch(uint32_t offset)
 {
     if (running || !eventQ) return false;
     // タスクを作る前に値を設定する。タスクは引数ではなくこれらの static 変数を読む
     // （running を先に立てるのは、タスクが即座に動いても二重に start() されないようにするため）
-    playPath = path;
-    playInfo = info;
+    startOffset = offset;
+    paused = false;
     stopReq = false;
-    playedBytes = 0;
+    playedBytes = offset;
     running = true;
     if (xTaskCreate(playTask, "player", TASK_STACK, NULL, TASK_PRIORITY, NULL) != pdPASS) {
         ESP_LOGE(TAG, "task create failed");
@@ -139,6 +142,36 @@ bool start(const char *path, const wav::Info &info)
         return false;
     }
     return true;
+}
+
+bool start(const char *path, const wav::Info &info)
+{
+    if (running || !eventQ) return false;
+    playPath = path;
+    playInfo = info;
+    return launch(0);
+}
+
+bool pause()
+{
+    if (!running) return false;
+    stop();
+    if (running) return false;  // タスクが終わらなかった
+    // 位置は、ステレオなら L/R の対、モノラルでも 1 サンプルの境目にそろえる
+    const uint32_t frame = playInfo.channels * sizeof(int16_t);
+    uint32_t off = playedBytes;
+    if (frame) off -= off % frame;
+    if (off > playInfo.dataBytes) off = playInfo.dataBytes;
+    startOffset = off;
+    playedBytes = off;
+    paused = true;
+    return true;
+}
+
+bool resume()
+{
+    if (running || !paused) return false;
+    return launch(startOffset);
 }
 
 uint32_t durationMs(const wav::Info &info)

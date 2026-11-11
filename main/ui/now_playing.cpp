@@ -29,9 +29,15 @@ static lv_obj_t *s_title = nullptr;
 static lv_obj_t *s_bar = nullptr;
 static lv_obj_t *s_state = nullptr;
 static lv_obj_t *s_time = nullptr;
+static lv_obj_t *s_repeatMark = nullptr;
+enum class State { Playing, Paused, Stopped };
 static bool s_active = false;   // 再生中の画面を出している間 true
-static bool s_playing = false;  // 再生中の表示。終了通知を受けたら下ろす
+static State s_state_v = State::Stopped;  // 再生の状態。終了通知を受けたら Stopped にする
 static bool s_finished = false;  // 最後まで再生して終わった
+static bool s_repeat = false;    // 1 曲リピート
+static int s_index = -1;         // 今の曲の、一覧での位置
+static std::string s_path;       // 今の曲のパス（停止後の再生・リピートで使う）
+static wav::Info s_info;
 static uint32_t s_durationMs = 0;
 static lv_obj_t *s_prevFocus = nullptr;  // 一覧で選んでいた行。戻るときに選び直す
 
@@ -40,7 +46,9 @@ static void refresh()
 {
     uint32_t pos = s_finished ? s_durationMs : player::positionMs();
     if (pos > s_durationMs) pos = s_durationMs;
-    lv_label_set_text(s_state, s_playing ? "再生中" : "停止");
+    const char *st = s_state_v == State::Playing ? "再生中" : s_state_v == State::Paused ? "一時停止" : "停止";
+    lv_label_set_text(s_state, st);
+    lv_label_set_text(s_repeatMark, s_repeat ? "リピート" : "");
     lv_label_set_text_fmt(s_time, "%02u:%02u / %02u:%02u", (unsigned)(pos / 60000),
                           (unsigned)(pos / 1000 % 60), (unsigned)(s_durationMs / 60000),
                           (unsigned)(s_durationMs / 1000 % 60));
@@ -55,7 +63,7 @@ static void close()
     player::EndReason reason;
     while (player::receive(reason, 0)) {}
     s_active = false;
-    s_playing = false;
+    s_state_v = State::Stopped;
 
     lv_group_t *group = lv_group_get_default();
     lv_group_focus_freeze(group, false);
@@ -66,10 +74,109 @@ static void close()
     s_prevFocus = nullptr;
 }
 
-/** @brief 再生中の画面で押されたキー。Esc で止めて一覧に戻る（Enter などは今は何もしない） */
+/** @brief 溜まっている終了通知を捨てる（自分で止めた・始め直したときの通知を、終了と取り違えないため） */
+static void drainEvents()
+{
+    player::EndReason reason;
+    while (player::receive(reason, 0)) {}
+}
+
+/** @brief 今の曲を最初から再生する（停止後の Space とリピートで使う）。成功で true */
+static bool restart()
+{
+    player::stop();
+    drainEvents();
+    if (!player::start(s_path.c_str(), s_info)) {
+        ESP_LOGE(TAG, "player restart failed");
+        s_state_v = State::Stopped;
+        return false;
+    }
+    s_state_v = State::Playing;
+    s_finished = false;
+    return true;
+}
+
+/** @brief 一覧の index 番目の曲を再生して、表示を切り替える。解析か開始に失敗したら false（今の再生は続ける） */
+static bool playIndex(int index)
+{
+    const char *name = file_list::nameAt(index);
+    if (!name) return false;
+    const std::string path = sdcard::wavPath(name);
+    wav::Info info;
+    char err[40] = "";
+    if (!wav::parse(path.c_str(), info, err, sizeof(err))) {
+        ESP_LOGE(TAG, "wav parse failed: %s: %s", name, err);
+        return false;
+    }
+    ESP_LOGI(TAG, "wav: %s rate=%u ch=%u bits=%u data_offset=%u data_bytes=%u", name,
+             (unsigned)info.sampleRate, (unsigned)info.channels, (unsigned)info.bitsPerSample,
+             (unsigned)info.dataOffset, (unsigned)info.dataBytes);
+
+    // 前の曲が再生中・一時停止中でも止める。古い通知が残っていると、新しい再生が終わったことになる
+    player::stop();
+    drainEvents();
+    if (!player::start(path.c_str(), info)) {
+        ESP_LOGE(TAG, "player start failed: %s", name);
+        s_state_v = State::Stopped;
+        return false;
+    }
+    s_index = index;
+    s_path = path;
+    s_info = info;
+    s_durationMs = player::durationMs(info);
+    s_state_v = State::Playing;
+    s_finished = false;
+    lv_label_set_text(s_title, name);
+    // 一覧に戻ったとき、今の曲の行を選ぶ
+    if (lv_obj_t *row = file_list::rowAt(index)) s_prevFocus = row;
+    refresh();
+    return true;
+}
+
+/** @brief Space: 再生中は一時停止、一時停止中は続きから、停止中は最初から */
+static void togglePause()
+{
+    switch (s_state_v) {
+    case State::Playing:
+        if (player::pause()) {
+            drainEvents();  // 一時停止で出る Stopped の通知は終了ではない
+            s_state_v = State::Paused;
+        }
+        break;
+    case State::Paused:
+        if (player::resume()) s_state_v = State::Playing;
+        else ESP_LOGE(TAG, "player resume failed");
+        break;
+    case State::Stopped:
+        restart();
+        break;
+    }
+    refresh();
+}
+
+/** @brief 再生中の画面で押されたキー */
 static void onKey(lv_event_t *e)
 {
-    if (lv_event_get_key(e) == LV_KEY_ESC) close();
+    switch (lv_event_get_key(e)) {
+    case LV_KEY_ESC:
+        close();
+        break;
+    case ' ':
+        togglePause();
+        break;
+    case LV_KEY_RIGHT:  // 端では何もしない
+        if (s_index + 1 < file_list::count()) playIndex(s_index + 1);
+        break;
+    case LV_KEY_LEFT:
+        if (s_index > 0) playIndex(s_index - 1);
+        break;
+    case 'r':
+        s_repeat = !s_repeat;
+        refresh();
+        break;
+    default:
+        break;
+    }
 }
 
 /** @brief 終了通知と再生位置を見て、画面を更新する（LVGL のタスクで周期的に呼ばれる） */
@@ -79,9 +186,11 @@ static void poll(lv_timer_t *)
     player::EndReason reason;
     if (player::receive(reason, 0)) {
         ESP_LOGI(TAG, "playback end: %d", (int)reason);
-        s_playing = false;
+        s_state_v = State::Stopped;
         // 最後まで再生したときは、位置が端数でずれないよう満了の表示にする
         s_finished = reason == player::EndReason::Finished;
+        // リピートがオンなら、同じ曲を最初から始める
+        if (s_finished && s_repeat) restart();
     }
     refresh();
 }
@@ -126,39 +235,21 @@ void create()
     s_time = lv_label_create(s_root);
     lv_obj_align(s_time, LV_ALIGN_TOP_RIGHT, -MARGIN, INFO_Y);
 
+    // リピートがオンの間だけ文字を出す（状態と時間の間）
+    s_repeatMark = lv_label_create(s_root);
+    lv_obj_set_style_text_color(s_repeatMark, lv_color_make(0x40, 0xc0, 0x60), 0);
+    lv_obj_align(s_repeatMark, LV_ALIGN_TOP_MID, -10, INFO_Y);
+
     lv_timer_create(poll, POLL_MS, nullptr);
 }
 
 void open(const std::string &name)
 {
-    const std::string path = sdcard::wavPath(name);
-    wav::Info info;
-    char err[40] = "";
-    if (!wav::parse(path.c_str(), info, err, sizeof(err))) {
-        ESP_LOGE(TAG, "wav parse failed: %s: %s", name.c_str(), err);
-        return;
-    }
-    ESP_LOGI(TAG, "wav: %s rate=%u ch=%u bits=%u data_offset=%u data_bytes=%u", name.c_str(),
-             (unsigned)info.sampleRate, (unsigned)info.channels, (unsigned)info.bitsPerSample,
-             (unsigned)info.dataOffset, (unsigned)info.dataBytes);
-
-    // 古い通知が残っていると、新しい再生が終わったことになってしまうので捨てる
-    player::EndReason reason;
-    while (player::receive(reason, 0)) {}
-    if (!player::start(path.c_str(), info)) {
-        ESP_LOGE(TAG, "player start failed: %s", name.c_str());
-        return;
-    }
-
-    s_durationMs = player::durationMs(info);
-    s_playing = true;
-    s_finished = false;
-    s_active = true;
-    lv_label_set_text(s_title, name.c_str());
-    refresh();
-
+    const int index = file_list::indexOf(name.c_str());
     lv_group_t *group = lv_group_get_default();
     s_prevFocus = lv_group_get_focused(group);
+    if (!playIndex(index)) return;
+    s_active = true;
     file_list::setVisible(false);
     lv_obj_remove_flag(s_root, LV_OBJ_FLAG_HIDDEN);
     lv_group_add_obj(group, s_root);

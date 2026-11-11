@@ -62,6 +62,12 @@ static uint32_t toLvKey(Key key)
     case Key::Prev:  return LV_KEY_PREV;
     case Key::Enter: return LV_KEY_ENTER;
     case Key::Esc:   return LV_KEY_ESC;
+    // 以下は項目の移動に使わない（再生中の画面ではフォーカスを固定しているので、
+    // LV_KEY_NEXT / PREV は使えず、画面のイベントまで届く別のキーに割り当てる）
+    case Key::PlayPause: return ' ';
+    case Key::NextTrack: return LV_KEY_RIGHT;
+    case Key::PrevTrack: return LV_KEY_LEFT;
+    case Key::Repeat:    return 'r';
     }
     return 0;
 }
