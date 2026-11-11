@@ -7,7 +7,6 @@
 #include <string>
 
 #include "esp_log.h"
-#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -56,10 +55,12 @@ static constexpr float EQ_F_MAX = 8000.0f;   // 最も高い帯域の中心周�
 static constexpr float EQ_DB_FLOOR = -60.0f; // この dB 以下をレベル 0 にする（フルスケールの正弦波が 0 dB）
 static constexpr float EQ_DB_CEIL = -12.0f;  // この dB 以上をレベル 100 にする
 
-// 計算は再生用のタスクより優先度の低い専用のタスクで行う。再生用のタスクは窓をコピーして知らせるだけ
-static constexpr UBaseType_t EQ_TASK_PRIORITY = 2;
+// 計算は専用のタスクで行う。再生用のタスクは窓をコピーして知らせるだけで、計算を待たない。
+// 優先度は、スピーカーのタスク（6、pocket-deck.cpp）> LVGL・再生用のタスク（5）> この計算（1）の順。
+// 計算は 1 回に約 6ms（最大約 12ms、実機で計測）かかるので、音の経路より低くして、音を優先する。
+// 計算が間に合わなければ、そのチャンクは捨てる（棒の動きが粗くなるだけ）
+static constexpr UBaseType_t EQ_TASK_PRIORITY = 1;
 static constexpr uint32_t EQ_TASK_STACK = 3072;
-static constexpr int EQ_LOG_EVERY = 64;  // 【一時的】計算時間をこの回数ごとにログへ出す
 
 static float eqMono[EQ_WINDOW];                 // 窓のモノラル化したデータ。計算のタスクだけが使う
 static int16_t eqCopy[EQ_WINDOW * 2];           // 再生用のタスクが渡す窓のコピー（ステレオなら L/R 交互）
@@ -129,23 +130,10 @@ static void eqCompute()
 /** @brief 計算のタスク。通知を受けるたびに eqCopy を計算する。作りっぱなしで、begin() が 1 回だけ作る */
 static void eqTaskFn(void *)
 {
-    int count = 0;
-    int64_t sumUs = 0, maxUs = 0;  // 【一時的】計算時間の集計
     for (;;) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        const int64_t t0 = esp_timer_get_time();
         eqCompute();
-        const int64_t dt = esp_timer_get_time() - t0;
         eqBusy = false;
-        sumUs += dt;
-        if (dt > maxUs) maxUs = dt;
-        if (++count >= EQ_LOG_EVERY) {
-            ESP_LOGI(TAG, "eq compute: avg %lld us, max %lld us (%d runs)", (long long)(sumUs / count),
-                     (long long)maxUs, count);
-            count = 0;
-            sumUs = 0;
-            maxUs = 0;
-        }
     }
 }
 
