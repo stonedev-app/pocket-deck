@@ -19,9 +19,16 @@ static constexpr int TITLE_Y = 4;
 static constexpr int BAR_Y = 30;
 static constexpr int BAR_H = 8;
 static constexpr int INFO_Y = 44;
-// イコライザー（段階 5）の場所として、INFO_Y の下を空けておく
+// イコライザーは INFO_Y の下の空き（高さ 54px）に置く
+static constexpr int EQ_Y = 66;
+static constexpr int EQ_H = 54;
+static constexpr int EQ_GAP = 4;  // 棒の間の隙間 [px]
 // 再生の状態を見る周期 [ms]
 static constexpr uint32_t POLL_MS = 100;
+// イコライザーを更新する周期 [ms]
+static constexpr uint32_t EQ_POLL_MS = 40;
+// 下がるときの 1 回あたりの減り幅（レベル 0〜100）。上がるときは一気に追いつく
+static constexpr int EQ_FALL = 8;
 
 // 以下は LVGL のタスクの中（と、起動前の create()）だけで読み書きする
 static lv_obj_t *s_root = nullptr;
@@ -40,6 +47,8 @@ static std::string s_path;       // 今の曲のパス（停止後の再生・�
 static wav::Info s_info;
 static uint32_t s_durationMs = 0;
 static lv_obj_t *s_prevFocus = nullptr;  // 一覧で選んでいた行。戻るときに選び直す
+static lv_obj_t *s_eqBars[player::EQ_BANDS];
+static int s_eqShown[player::EQ_BANDS];  // 表示中のレベル（0〜100）
 
 /** @brief 状態の文字と、時間の文字と、バーを今の再生位置に合わせる */
 static void refresh()
@@ -195,6 +204,43 @@ static void poll(lv_timer_t *)
     refresh();
 }
 
+/** @brief player のレベルを読み、棒を更新する。上がるときは速く、下がるときは少しずつ */
+static void eqPoll(lv_timer_t *)
+{
+    if (!s_active) return;
+    uint8_t target[player::EQ_BANDS];
+    player::eqLevels(target);
+    for (int b = 0; b < player::EQ_BANDS; b++) {
+        int cur = s_eqShown[b];
+        if (target[b] >= cur) {
+            cur = cur + (target[b] - cur + 1) * 3 / 4;  // 差の 3/4 まで一気に上げる
+            if (cur > target[b]) cur = target[b];
+        } else {
+            cur -= EQ_FALL;
+            if (cur < target[b]) cur = target[b];
+        }
+        if (cur == s_eqShown[b]) continue;
+        s_eqShown[b] = cur;
+        const int h = cur * EQ_H / 100;
+        if (h <= 0) {
+            lv_obj_add_flag(s_eqBars[b], LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_remove_flag(s_eqBars[b], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_height(s_eqBars[b], h);
+            lv_obj_set_y(s_eqBars[b], EQ_Y + EQ_H - h);
+        }
+    }
+}
+
+/** @brief 棒をすべて 0 に戻す（画面を開くとき） */
+static void eqReset()
+{
+    for (int b = 0; b < player::EQ_BANDS; b++) {
+        s_eqShown[b] = 0;
+        lv_obj_add_flag(s_eqBars[b], LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
 void create()
 {
     lv_obj_t *screen = lv_screen_active();
@@ -240,7 +286,21 @@ void create()
     lv_obj_set_style_text_color(s_repeatMark, lv_color_make(0x40, 0xc0, 0x60), 0);
     lv_obj_align(s_repeatMark, LV_ALIGN_TOP_MID, -10, INFO_Y);
 
+    // イコライザー。高さ 0 の間は隠す
+    const int pitch = w / player::EQ_BANDS;
+    for (int b = 0; b < player::EQ_BANDS; b++) {
+        lv_obj_t *bar = lv_obj_create(s_root);
+        lv_obj_remove_style_all(bar);
+        lv_obj_set_width(bar, pitch - EQ_GAP);
+        lv_obj_set_pos(bar, MARGIN + b * pitch + EQ_GAP / 2, EQ_Y + EQ_H);
+        lv_obj_set_style_bg_color(bar, lv_color_make(0x40, 0xc0, 0x60), 0);
+        lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+        lv_obj_add_flag(bar, LV_OBJ_FLAG_HIDDEN);
+        s_eqBars[b] = bar;
+    }
+
     lv_timer_create(poll, POLL_MS, nullptr);
+    lv_timer_create(eqPoll, EQ_POLL_MS, nullptr);
 }
 
 void open(const std::string &name)
@@ -250,6 +310,7 @@ void open(const std::string &name)
     s_prevFocus = lv_group_get_focused(group);
     if (!playIndex(index)) return;
     s_active = true;
+    eqReset();
     file_list::setVisible(false);
     lv_obj_remove_flag(s_root, LV_OBJ_FLAG_HIDDEN);
     lv_group_add_obj(group, s_root);

@@ -114,6 +114,13 @@ extern "C" void app_main(void)
 
     // スピーカー（ES8311 コーデック。I2S は M5Unified が設定する）の初期化は、起動時に 1 回だけ行う。
     // volume::begin() は M5.Speaker.begin() の後でないと音量が反映されない
+    // スピーカーのタスクを、LVGL・再生用のタスク（優先度 5）より高い 6 にする。
+    // 既定の 2 では、イコライザーの描画が忙しいときに CPU を取れず、音が途切れた（実機で確認）。
+    // begin() は開始済みだと何もしないので、end() で止めてから設定し直す
+    M5.Speaker.end();
+    auto spk = M5.Speaker.config();
+    spk.task_priority = 6;
+    M5.Speaker.config(spk);
     M5.Speaker.begin();
     volume::begin();
 
