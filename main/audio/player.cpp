@@ -2,10 +2,12 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <string>
 
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -54,7 +56,16 @@ static constexpr float EQ_F_MAX = 8000.0f;   // 最も高い帯域の中心周�
 static constexpr float EQ_DB_FLOOR = -60.0f; // この dB 以下をレベル 0 にする（フルスケールの正弦波が 0 dB）
 static constexpr float EQ_DB_CEIL = -12.0f;  // この dB 以上をレベル 100 にする
 
-static float eqMono[EQ_WINDOW];                 // 窓のモノラル化したデータ。再生用のタスクだけが使う
+// 計算は再生用のタスクより優先度の低い専用のタスクで行う。再生用のタスクは窓をコピーして知らせるだけ
+static constexpr UBaseType_t EQ_TASK_PRIORITY = 2;
+static constexpr uint32_t EQ_TASK_STACK = 3072;
+static constexpr int EQ_LOG_EVERY = 64;  // 【一時的】計算時間をこの回数ごとにログへ出す
+
+static float eqMono[EQ_WINDOW];                 // 窓のモノラル化したデータ。計算のタスクだけが使う
+static int16_t eqCopy[EQ_WINDOW * 2];           // 再生用のタスクが渡す窓のコピー（ステレオなら L/R 交互）
+static volatile bool eqBusy = false;            // true の間は計算のタスクが eqCopy を使う。再生用のタスクは触らない
+static volatile bool eqStereo = false;          // eqCopy がステレオか
+static TaskHandle_t eqTask = nullptr;
 static float eqCoeff[EQ_BANDS];                 // Goertzel の係数 2cos(w)。0 の帯域は計算しない
 static volatile uint8_t eqLevel[EQ_BANDS];      // 読み出し用のレベル（0〜100）
 
@@ -77,18 +88,19 @@ static void eqPrepare(uint32_t sampleRate)
     }
 }
 
-/** @brief data（n 要素）の先頭の窓から、各帯域のレベルを求める。足りないときは何もしない */
-static void eqUpdate(const int16_t *data, size_t n, bool stereo)
+/** @brief eqCopy の窓から、各帯域のレベルを求める（計算のタスクで呼ぶ） */
+static void eqCompute()
 {
-    const size_t frames = stereo ? n / 2 : n;
-    if (frames < EQ_WINDOW) return;
+    const int16_t *data = eqCopy;
+    const bool stereo = eqStereo;
+    uint8_t out[EQ_BANDS];
     for (size_t i = 0; i < EQ_WINDOW; i++) {
         eqMono[i] = stereo ? 0.5f * ((float)data[2 * i] + (float)data[2 * i + 1]) : (float)data[i];
     }
     for (int b = 0; b < EQ_BANDS; b++) {
         const float c = eqCoeff[b];
         if (c == 0.0f) {
-            eqLevel[b] = 0;
+            out[b] = 0;
             continue;
         }
         float s1 = 0.0f, s2 = 0.0f;
@@ -107,8 +119,49 @@ static void eqUpdate(const int16_t *data, size_t n, bool stereo)
         }
         if (level < 0.0f) level = 0.0f;
         if (level > 100.0f) level = 100.0f;
-        eqLevel[b] = (uint8_t)level;
+        out[b] = (uint8_t)level;
     }
+    // 再生が終わっていたら書かない（終了時にクリアした 0 を上書きしないため）
+    if (!running) return;
+    for (int b = 0; b < EQ_BANDS; b++) eqLevel[b] = out[b];
+}
+
+/** @brief 計算のタスク。通知を受けるたびに eqCopy を計算する。作りっぱなしで、begin() が 1 回だけ作る */
+static void eqTaskFn(void *)
+{
+    int count = 0;
+    int64_t sumUs = 0, maxUs = 0;  // 【一時的】計算時間の集計
+    for (;;) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        const int64_t t0 = esp_timer_get_time();
+        eqCompute();
+        const int64_t dt = esp_timer_get_time() - t0;
+        eqBusy = false;
+        sumUs += dt;
+        if (dt > maxUs) maxUs = dt;
+        if (++count >= EQ_LOG_EVERY) {
+            ESP_LOGI(TAG, "eq compute: avg %lld us, max %lld us (%d runs)", (long long)(sumUs / count),
+                     (long long)maxUs, count);
+            count = 0;
+            sumUs = 0;
+            maxUs = 0;
+        }
+    }
+}
+
+/**
+ * @brief data（n 要素）の先頭の窓を計算のタスクへ渡す。再生用のタスクから呼ぶ
+ *
+ * 窓をコピーして通知するだけで、計算は待たない。前の計算が終わっていなければ、このチャンクは捨てる。
+ */
+static void eqSubmit(const int16_t *data, size_t n, bool stereo)
+{
+    const size_t frames = stereo ? n / 2 : n;
+    if (frames < EQ_WINDOW || eqBusy || !eqTask) return;
+    memcpy(eqCopy, data, EQ_WINDOW * (stereo ? 2 : 1) * sizeof(int16_t));
+    eqStereo = stereo;
+    eqBusy = true;
+    xTaskNotifyGive(eqTask);
 }
 
 /** @brief 終了通知をキューへ入れる。満杯なら捨てる */
@@ -152,8 +205,8 @@ static void playTask(void *)
             }
             // キューに空きがないときは、空きが出るまでここで待つ
             M5.Speaker.playRaw(buf[i], n, playInfo.sampleRate, stereo, 1, CHANNEL);
-            // 映像が音より先に動かないよう、playRaw が戻った（キューに空きができた）後に計算する
-            eqUpdate(buf[i], n, stereo);
+            // 映像が音より先に動かないよう、playRaw が戻った（キューに空きができた）後に渡す
+            eqSubmit(buf[i], n, stereo);
             i = (i + 1) % BUF_COUNT;
             remain -= n;
             playedBytes = playedBytes + (uint32_t)(n * sizeof(int16_t));
@@ -164,16 +217,21 @@ static void playTask(void *)
     }
     if (f) fclose(f);
     if (stopReq) reason = EndReason::Stopped;
-    eqClear();  // 止まる・終わる・一時停止のどれでも、棒は 0 に戻す
 
     // running を下ろす前に送る。stop() から戻った時点で、通知がキューに入っていることを保証する
     notifyEnd(reason);
     running = false;
+    eqClear();  // 止まる・終わる・一時停止のどれでも、棒は 0 に戻す。running を下ろした後なので計算側は上書きしない
     vTaskDelete(NULL);
 }
 
 bool begin()
 {
+    if (!eqTask &&
+        xTaskCreate(eqTaskFn, "player_eq", EQ_TASK_STACK, NULL, EQ_TASK_PRIORITY, &eqTask) != pdPASS) {
+        ESP_LOGE(TAG, "eq task create failed");
+        eqTask = nullptr;  // イコライザーなしで再生は続ける
+    }
     if (!eventQ) {
         eventQ = xQueueCreate(EVENT_QUEUE_LEN, sizeof(EndReason));
         if (!eventQ) {
