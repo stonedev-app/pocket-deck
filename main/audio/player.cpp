@@ -1,5 +1,6 @@
 #include "audio/player.hpp"
 
+#include <math.h>
 #include <stdio.h>
 
 #include <string>
@@ -44,6 +45,72 @@ static uint32_t startOffset = 0;           // タスクが読み始める data �
 static bool paused = false;                // pause() で止めていて、resume() で続けられる間 true
 static QueueHandle_t eventQ = nullptr;  // 終了通知のキュー
 
+// ---- イコライザー用のレベル計算 ----
+// FFT の代わりに Goertzel 法で、12 帯域の中心周波数だけを求める。FFT のバッファや係数表が要らず、
+// 窓 512 フレーム × 12 帯域 = 約 6000 回の積和を、チャンクごとに 1 回行うだけで済む（CPU の目安は PR 参照）
+static constexpr size_t EQ_WINDOW = 512;     // 1 回の計算に使うフレーム数
+static constexpr float EQ_F_MIN = 100.0f;    // 最も低い帯域の中心周波数 [Hz]
+static constexpr float EQ_F_MAX = 8000.0f;   // 最も高い帯域の中心周波数 [Hz]
+static constexpr float EQ_DB_FLOOR = -60.0f; // この dB 以下をレベル 0 にする（フルスケールの正弦波が 0 dB）
+static constexpr float EQ_DB_CEIL = -12.0f;  // この dB 以上をレベル 100 にする
+
+static float eqMono[EQ_WINDOW];                 // 窓のモノラル化したデータ。再生用のタスクだけが使う
+static float eqCoeff[EQ_BANDS];                 // Goertzel の係数 2cos(w)。0 の帯域は計算しない
+static volatile uint8_t eqLevel[EQ_BANDS];      // 読み出し用のレベル（0〜100）
+
+/** @brief レベルをすべて 0 に戻す */
+static void eqClear()
+{
+    for (int b = 0; b < EQ_BANDS; b++) eqLevel[b] = 0;
+}
+
+/** @brief サンプルレートに合わせて係数を作る。ナイキスト周波数に近い帯域は使わない */
+static void eqPrepare(uint32_t sampleRate)
+{
+    for (int b = 0; b < EQ_BANDS; b++) {
+        const float f = EQ_F_MIN * powf(EQ_F_MAX / EQ_F_MIN, (float)b / (EQ_BANDS - 1));
+        if (sampleRate == 0 || f >= 0.45f * (float)sampleRate) {
+            eqCoeff[b] = 0.0f;
+        } else {
+            eqCoeff[b] = 2.0f * cosf(2.0f * (float)M_PI * f / (float)sampleRate);
+        }
+    }
+}
+
+/** @brief data（n 要素）の先頭の窓から、各帯域のレベルを求める。足りないときは何もしない */
+static void eqUpdate(const int16_t *data, size_t n, bool stereo)
+{
+    const size_t frames = stereo ? n / 2 : n;
+    if (frames < EQ_WINDOW) return;
+    for (size_t i = 0; i < EQ_WINDOW; i++) {
+        eqMono[i] = stereo ? 0.5f * ((float)data[2 * i] + (float)data[2 * i + 1]) : (float)data[i];
+    }
+    for (int b = 0; b < EQ_BANDS; b++) {
+        const float c = eqCoeff[b];
+        if (c == 0.0f) {
+            eqLevel[b] = 0;
+            continue;
+        }
+        float s1 = 0.0f, s2 = 0.0f;
+        for (size_t i = 0; i < EQ_WINDOW; i++) {
+            const float s = eqMono[i] + c * s1 - s2;
+            s2 = s1;
+            s1 = s;
+        }
+        float power = s1 * s1 + s2 * s2 - c * s1 * s2;
+        if (power < 0.0f) power = 0.0f;
+        // 振幅をフルスケール（32768）に対する比にそろえる。正弦波なら 1.0 で 0 dB
+        const float amp = 2.0f * sqrtf(power) / ((float)EQ_WINDOW * 32768.0f);
+        float level = 0.0f;
+        if (amp > 1e-6f) {
+            level = (20.0f * log10f(amp) - EQ_DB_FLOOR) / (EQ_DB_CEIL - EQ_DB_FLOOR) * 100.0f;
+        }
+        if (level < 0.0f) level = 0.0f;
+        if (level > 100.0f) level = 100.0f;
+        eqLevel[b] = (uint8_t)level;
+    }
+}
+
 /** @brief 終了通知をキューへ入れる。満杯なら捨てる */
 static void notifyEnd(EndReason reason)
 {
@@ -85,6 +152,8 @@ static void playTask(void *)
             }
             // キューに空きがないときは、空きが出るまでここで待つ
             M5.Speaker.playRaw(buf[i], n, playInfo.sampleRate, stereo, 1, CHANNEL);
+            // 映像が音より先に動かないよう、playRaw が戻った（キューに空きができた）後に計算する
+            eqUpdate(buf[i], n, stereo);
             i = (i + 1) % BUF_COUNT;
             remain -= n;
             playedBytes = playedBytes + (uint32_t)(n * sizeof(int16_t));
@@ -95,6 +164,7 @@ static void playTask(void *)
     }
     if (f) fclose(f);
     if (stopReq) reason = EndReason::Stopped;
+    eqClear();  // 止まる・終わる・一時停止のどれでも、棒は 0 に戻す
 
     // running を下ろす前に送る。stop() から戻った時点で、通知がキューに入っていることを保証する
     notifyEnd(reason);
@@ -135,6 +205,8 @@ static bool launch(uint32_t offset)
     paused = false;
     stopReq = false;
     playedBytes = offset;
+    eqPrepare(playInfo.sampleRate);
+    eqClear();
     running = true;
     if (xTaskCreate(playTask, "player", TASK_STACK, NULL, TASK_PRIORITY, NULL) != pdPASS) {
         ESP_LOGE(TAG, "task create failed");
@@ -188,6 +260,11 @@ uint32_t positionMs()
     uint64_t bytes = playedBytes;
     if (bytes > playInfo.dataBytes) bytes = playInfo.dataBytes;
     return (uint32_t)(bytes * 1000 / bytesPerSec);
+}
+
+void eqLevels(uint8_t out[EQ_BANDS])
+{
+    for (int b = 0; b < EQ_BANDS; b++) out[b] = eqLevel[b];
 }
 
 void stop()
