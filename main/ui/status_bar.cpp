@@ -31,10 +31,8 @@ static constexpr int BATTERY_HYSTERESIS = 3;
 
 static const char *TAG = "status_bar";
 static lv_obj_t *s_batteryFill = nullptr;
-// 表示中の残量（-1 は取得できていない）と充電中か。LVGL のタスクの中だけで読み書きする
-// （-2 は未表示）
+// 表示中の残量（-1 は取得できていない、-2 は未表示）。LVGL のタスクの中だけで読み書きする
 static int s_batteryPercent = -2;
-static bool s_batteryCharging = false;
 
 // 音量の状態を見る周期 [ms]
 static constexpr uint32_t POLL_MS = 50;
@@ -151,8 +149,8 @@ static lv_obj_t *createBox(lv_obj_t *parent, int w, int h)
     return o;
 }
 
-/** @brief 中身の長さと色を、残量（%、不正なら負）と充電中かどうかに合わせる */
-static void applyBattery(int percent, bool charging)
+/** @brief 中身の長さと色を、残量（%、不正なら負）に合わせる。残量が少ないときは赤にする */
+static void applyBattery(int percent)
 {
     const int inner = BATTERY_W - 4;
     const int w = percent < 0 ? 0 : inner * percent / 100;
@@ -163,9 +161,8 @@ static void applyBattery(int percent, bool charging)
     }
     lv_obj_remove_flag(s_batteryFill, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_width(s_batteryFill, w);
-    lv_color_t color = lv_color_white();
-    if (charging) color = lv_color_make(0x40, 0xd0, 0x60);
-    else if (percent <= BATTERY_LOW_PERCENT) color = lv_color_make(0xff, 0x40, 0x40);
+    const lv_color_t color =
+        percent <= BATTERY_LOW_PERCENT ? lv_color_make(0xff, 0x40, 0x40) : lv_color_white();
     lv_obj_set_style_bg_color(s_batteryFill, color, 0);
 }
 
@@ -173,13 +170,15 @@ static void applyBattery(int percent, bool charging)
  * @brief 電池の残量を読んで、変わっていたら絵を更新する（LVGL のタスクで周期的に呼ばれる）
  *
  * ADC のぶれでちらつかないよう、前回の表示から BATTERY_HYSTERESIS 以上
- * 離れたときだけ更新する（充電中・残量が少ない状態の切り替わりは別に見る）。
+ * 離れたときだけ更新する。色の切り替わりも表示中の残量で決まるので、最大 BATTERY_HYSTERESIS 遅れる。
+ *
+ * 充電中の表示はしない。Cardputer-Adv では M5.Power.isCharging() が常に charge_unknown を返し、
+ * 充電状態が取れない（実機で確認）。
  */
 static void pollBattery(lv_timer_t *)
 {
     const int32_t raw = M5.Power.getBatteryLevel();
     const bool valid = raw >= 0 && raw <= 100;
-    const bool charging = valid && M5.Power.isCharging() == m5::Power_Class::is_charging;
 
     int percent = s_batteryPercent;
     if (!valid) {
@@ -189,13 +188,12 @@ static void pollBattery(lv_timer_t *)
         percent = (int)raw;
     }
 
-    if (percent == s_batteryPercent && charging == s_batteryCharging) return;
+    if (percent == s_batteryPercent) return;
     if (!valid && s_batteryPercent != -1) {
         ESP_LOGW(TAG, "battery level unavailable: %d", (int)raw);
     }
     s_batteryPercent = percent;
-    s_batteryCharging = charging;
-    applyBattery(percent, charging);
+    applyBattery(percent);
 }
 
 /** @brief 電池の絵（横長の枠、中身、右の突起）を作る。中身は pollBattery が更新する */
