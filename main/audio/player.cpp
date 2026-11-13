@@ -28,6 +28,7 @@ static constexpr uint8_t CHANNEL = 0;      // playRaw に明示するチャン�
 // ファイル読み出しと playRaw の呼び出しだけなので 4KB で足りる。優先度は ui のタスクと同じ
 static constexpr uint32_t TASK_STACK = 4096;
 static constexpr UBaseType_t TASK_PRIORITY = 5;
+static constexpr size_t SECTOR_BYTES = 512;  // SD のセクタ。読み出しをこの境目にそろえる
 static constexpr int STOP_WAIT_MS = 2000;  // stop() がタスクの終了を待つ上限
 // 待ちループの刻み。CONFIG_FREERTOS_HZ=100（1 tick = 10ms）では 5ms が 0 tick になり、
 // vTaskDelay(0) では IDLE が走れずウォッチドッグが発火するため、必ず 1 tick 以上にする
@@ -180,10 +181,22 @@ static void playTask(void *)
         bool stereo = playInfo.channels == 2;
         size_t remain = (playInfo.dataBytes - startOffset) / sizeof(int16_t);  // 残りの要素数
         int i = 0;
+        bool first = true;
         while (remain > 0 && !stopReq) {
             size_t want = remain < BUF_ELEMS ? remain : BUF_ELEMS;
             if (stereo) want &= ~(size_t)1;  // ステレオは L/R が対なので、チャンクの切れ目で片チャンネルだけにならないよう偶数にそろえる
             if (want == 0) break;
+            // 最初の 1 回だけ、読み終わりがセクタ（512B）の境目になる長さに縮める。
+            // 再開位置は境目と合わないので、そろえないとその後の読み出しがすべてセクタをまたぎ、SD が遅くなる
+            if (first) {
+                first = false;
+                const size_t misalign = (size_t)((playInfo.dataOffset + startOffset) % SECTOR_BYTES);
+                if (misalign != 0) {
+                    size_t head = (SECTOR_BYTES - misalign) / sizeof(int16_t);
+                    if (stereo) head &= ~(size_t)1;
+                    if (head > 0 && head < want) want = head;
+                }
+            }
             size_t n = fread(buf[i], sizeof(int16_t), want, f);
             if (stereo) n &= ~(size_t)1;
             if (n == 0) {  // データが残っているのに読めない
