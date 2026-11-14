@@ -25,9 +25,11 @@ static const char *TAG = "player";
 static constexpr int BUF_COUNT = 3;        // バッファの個数。順番に使う
 static constexpr size_t BUF_ELEMS = 2048;  // 1 個あたりの要素数（int16_t）
 static constexpr uint8_t CHANNEL = 0;      // playRaw に明示するチャンネル。音量・停止も同じ番号で操作する
-// ファイル読み出しと playRaw の呼び出しだけなので 4KB で足りる。優先度は ui のタスクと同じ
+// ファイル読み出しと playRaw の呼び出しだけなので 4KB で足りる。
+// 優先度はスピーカーのタスクと同じ 6（ui のタスクの 5 より高い）。再開後は SD の読み出しが遅く、
+// 同じ 5 だと LVGL の描画に CPU を取られて、音のキューが空になるため
 static constexpr uint32_t TASK_STACK = 4096;
-static constexpr UBaseType_t TASK_PRIORITY = 5;
+static constexpr UBaseType_t TASK_PRIORITY = 6;
 static constexpr int STOP_WAIT_MS = 2000;  // stop() がタスクの終了を待つ上限
 // 待ちループの刻み。CONFIG_FREERTOS_HZ=100（1 tick = 10ms）では 5ms が 0 tick になり、
 // vTaskDelay(0) では IDLE が走れずウォッチドッグが発火するため、必ず 1 tick 以上にする
@@ -56,7 +58,7 @@ static constexpr float EQ_DB_FLOOR = -60.0f; // この dB 以下をレベル 0 �
 static constexpr float EQ_DB_CEIL = -12.0f;  // この dB 以上をレベル 100 にする
 
 // 計算は専用のタスクで行う。再生用のタスクは窓をコピーして知らせるだけで、計算を待たない。
-// 優先度は、スピーカーのタスク（6、pocket-deck.cpp）> LVGL・再生用のタスク（5）> この計算（1）の順。
+// 優先度は、スピーカー・再生用のタスク（6）> LVGL（5）> この計算（1）の順。
 // 計算は 1 回に約 6ms（最大約 12ms、実機で計測）かかるので、音の経路より低くして、音を優先する。
 // 計算が間に合わなければ、そのチャンクは捨てる（棒の動きが粗くなるだけ）
 static constexpr UBaseType_t EQ_TASK_PRIORITY = 1;
