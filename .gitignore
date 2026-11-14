@@ -10,3 +10,7 @@ sdkconfig.old
 
 # IDF Component Manager でダウンロードされたコンポーネント
 managed_components/
+
+# VSCode / clangd のローカル設定
+.vscode/
+.clangd
