@@ -3,9 +3,9 @@
 #include <M5Unified.hpp>
 
 #include "app/playback.hpp"
-#include "ui/file_list.hpp"
-#include "ui/now_playing.hpp"
-#include "ui/status_bar.hpp"
+#include "ui/screens/file_list.hpp"
+#include "ui/screens/now_playing.hpp"
+#include "ui/widgets/status_bar.hpp"
 
 namespace ui {
 
