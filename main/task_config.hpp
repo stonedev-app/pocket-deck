@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
+#include "freertos/task.h"
 
 // タスクの優先度・コア・スタックを、ここに集める。
 //
