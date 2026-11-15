@@ -1,10 +1,5 @@
 #include "device/sdcard.hpp"
 
-#include <dirent.h>
-#include <algorithm>
-#include <string.h>
-#include <strings.h>
-
 #include "driver/sdspi_host.h"
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
@@ -21,7 +16,6 @@ static constexpr gpio_num_t PIN_SCLK = GPIO_NUM_40;
 static constexpr gpio_num_t PIN_MOSI = GPIO_NUM_14;
 static constexpr gpio_num_t PIN_MISO = GPIO_NUM_39;
 static constexpr gpio_num_t PIN_CS   = GPIO_NUM_12;
-static constexpr const char *MOUNT_POINT = "/sdcard";
 
 static bool mounted = false;
 
@@ -79,59 +73,11 @@ static bool mount()
     return true;
 }
 
-/**
- * @brief ファイルの拡張子が .wav（大文字小文字を区別しない）か
- *
- * macOS がコピー時に作る隠しファイル（._ で始まる名前）は音声ではないので除く。
- */
-static bool isWav(const struct dirent *ent)
-{
-    if (ent->d_type == DT_DIR) return false;
-    if (ent->d_name[0] == '.') return false;
-    const char *dot = strrchr(ent->d_name, '.');
-    return dot && strcasecmp(dot, ".wav") == 0;
-}
-
 bool begin()
 {
     if (mounted) return true;
     mounted = mount();
     return mounted;
-}
-
-bool listWav(std::vector<std::string> &names)
-{
-    names.clear();
-    DIR *dir = opendir(MOUNT_POINT);
-    if (!dir) {
-        ESP_LOGE(TAG, "opendir failed: %s", MOUNT_POINT);
-        return false;
-    }
-
-    int count = 0;
-    struct dirent *ent;
-    while ((ent = readdir(dir)) != nullptr) {
-        if (!isWav(ent)) continue;
-        ESP_LOGI(TAG, "wav: %s", ent->d_name);
-        names.push_back(ent->d_name);
-        count++;
-    }
-    closedir(dir);
-
-    // 大文字小文字を区別せず昇順。同じならバイト順で決める（順序を毎回同じにするため）
-    std::sort(names.begin(), names.end(), [](const std::string &a, const std::string &b) {
-        int c = strcasecmp(a.c_str(), b.c_str());
-        if (c != 0) return c < 0;
-        return strcmp(a.c_str(), b.c_str()) < 0;
-    });
-
-    ESP_LOGI(TAG, "wav files: %d", count);
-    return true;
-}
-
-std::string wavPath(const std::string &name)
-{
-    return std::string(MOUNT_POINT) + "/" + name;
 }
 
 }  // namespace sdcard
