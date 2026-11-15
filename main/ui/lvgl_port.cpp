@@ -20,8 +20,10 @@ static FlushFn s_flush = nullptr;
 static PollKeyFn s_pollKey = nullptr;
 
 // 描画バッファの行数。画面全体（240x135x2 = 約 63KB）ではなく、数行ずつ描いて転送する（PARTIAL）。
-// PSRAM がないので、内部 RAM に小さく取る。20 行で約 9.6KB
-static constexpr int BUF_LINES = 20;
+// PSRAM がないので、内部 RAM に小さく取る。40 行で約 19.2KB。
+// 描き直す領域がこの行数を超えると、分けて描く回数だけ手間が増える。曲名（高さ 20 行強）と
+// イコライザーが 1〜2 回で描けるよう、20 行から増やした（#57）
+static constexpr int BUF_LINES = 40;
 
 static constexpr uint32_t TASK_STACK = 8192;
 static constexpr UBaseType_t TASK_PRIORITY = 5;

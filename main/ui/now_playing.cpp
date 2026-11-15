@@ -51,17 +51,39 @@ static lv_obj_t *s_prevFocus = nullptr;  // 一覧で選んでいた行。戻る
 static lv_obj_t *s_eq = nullptr;         // イコライザー。棒はすべてこの 1 個の中に描く
 static int s_eqShown[player::EQ_BANDS];  // 表示中のレベル（0〜100）
 
-/** @brief 状態の文字と、時間の文字と、バーを今の再生位置に合わせる */
+/**
+ * @brief 状態の文字と、時間の文字と、バーを今の再生位置に合わせる
+ *
+ * 文字は、表示が変わるときだけ設定する。lv_label_set_text() は同じ文字でも描き直すので、
+ * 周期的に呼ぶたびに設定すると、変わっていない文字の描画で曲名の描画が遅れる（#57）。
+ */
 static void refresh()
 {
+    // 表示中の内容。最初は必ず設定されるよう、ありえない値にしておく
+    static const char *shownState = nullptr;
+    static int shownRepeat = -1;
+    static uint32_t shownPosSec = UINT32_MAX;
+    static uint32_t shownDurSec = UINT32_MAX;
+
     uint32_t pos = s_finished ? s_durationMs : player::positionMs();
     if (pos > s_durationMs) pos = s_durationMs;
     const char *st = s_state_v == State::Playing ? "再生中" : s_state_v == State::Paused ? "一時停止" : "停止";
-    lv_label_set_text(s_state, st);
-    lv_label_set_text(s_repeatMark, s_repeat ? "リピート" : "");
-    lv_label_set_text_fmt(s_time, "%02u:%02u / %02u:%02u", (unsigned)(pos / 60000),
-                          (unsigned)(pos / 1000 % 60), (unsigned)(s_durationMs / 60000),
-                          (unsigned)(s_durationMs / 1000 % 60));
+    if (st != shownState) {
+        shownState = st;
+        lv_label_set_text(s_state, st);
+    }
+    if ((int)s_repeat != shownRepeat) {
+        shownRepeat = s_repeat;
+        lv_label_set_text(s_repeatMark, s_repeat ? "リピート" : "");
+    }
+    const uint32_t posSec = pos / 1000;
+    const uint32_t durSec = s_durationMs / 1000;
+    if (posSec != shownPosSec || durSec != shownDurSec) {
+        shownPosSec = posSec;
+        shownDurSec = durSec;
+        lv_label_set_text_fmt(s_time, "%02u:%02u / %02u:%02u", (unsigned)(posSec / 60),
+                              (unsigned)(posSec % 60), (unsigned)(durSec / 60), (unsigned)(durSec % 60));
+    }
     lv_bar_set_value(s_bar, s_durationMs ? (int32_t)((uint64_t)pos * 1000 / s_durationMs) : 0,
                      LV_ANIM_OFF);
 }
