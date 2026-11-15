@@ -6,7 +6,7 @@ M5Stack Cardputer-Adv（ESP32-S3）で、ディスプレイ・キーボード・
 
 - 情報源は M5Stack 公式の出荷時デモ [`m5stack/M5Cardputer-UserDemo`](https://github.com/m5stack/M5Cardputer-UserDemo) の **`CardputerADV` ブランチ**と、そこが使う M5Unified のソースを直接読んだ内容。main ブランチは旧 Cardputer 用なので参照しない。
 - 「確認済み」はソースで確認した事実。「未確認」は推測または知識ベースで、実機やデータシートでの検証が必要。
-- 本ドキュメントのコード例は、上記ソースの使い方を元に書いたもので、**キーボード（4 章）と SD カード（9 章、ビルドのみ。実機は未確認）を除き、このリポジトリではまだビルド・実機確認をしていない**。キーボードは `main/keyboard.cpp` に実装済みで、ビルドと実機でのキー入力の動作を確認している。
+- 本ドキュメントのコード例は、上記ソースの使い方を元に書いたもので、**キーボード（4 章）と SD カード（9 章、ビルドのみ。実機は未確認）を除き、このリポジトリではまだビルド・実機確認をしていない**。キーボードは `main/device/keyboard.cpp` に実装済みで、ビルドと実機でのキー入力の動作を確認している。
 - 本プロジェクトの現状は C++（`main/pocket-deck.cpp` の `app_main`）、ESP-IDF v5.5.6、ターゲット esp32s3。UserDemo は ESP-IDF v5.4.2 で、バージョン差の影響は未確認（キーボードと画面表示は v5.5.6 でビルドでき、実機で動いている）。
 
 ## 1. 参照元の構成
@@ -78,7 +78,7 @@ canvas.pushSprite(0, 0);
 
 Cardputer-Adv のキーボードは **TCA8418（I2C のキーマトリクスコントローラ）** 経由で読む。M5Unified にはキーボード機能がなく、UserDemo は自前のドライバ（`main/hal/keyboard/` と `main/hal/utils/adafruit_tca8418/`）を持っている。
 
-本プロジェクトの実装（`main/keyboard.hpp` / `main/keyboard.cpp`）は、UserDemo のドライバを使わず、`M5.In_I2C` でレジスタを直接読み書きする。UserDemo との違いは次のとおり。実機でキー入力が動くことは確認済み。
+本プロジェクトの実装（`main/device/keyboard.hpp` / `main/device/keyboard.cpp`）は、UserDemo のドライバを使わず、`M5.In_I2C` でレジスタを直接読み書きする。UserDemo との違いは次のとおり。実機でキー入力が動くことは確認済み。
 
 - 割り込み（GPIO11、`NEGEDGE`）で入力タスクを起こす。ISR は `vTaskNotifyGiveFromISR` で通知するだけで、I2C はタスク側で読む。タスクは `KEY_LCK_EC`（0x03）のイベント件数を読み、溜まった分を読み切る。
 - 読み終えても INT が Low のままなら続けて読む（最大 4 回）。割り込みを取りこぼしても固着しないよう、100ms のタイムアウトでも読みにいく。
@@ -233,7 +233,7 @@ while (M5.Speaker.isPlaying()) { M5.delay(1); }
 
 ### 6.1 長い音声のチャンク再生
 
-SD カード上の WAV のように、メモリに収まらない音声は、小さなバッファに分けて `playRaw` で順に渡す。PSRAM がないので（2 章）、バッファは内部 SRAM に取る。M5Unified のヘッダの記述（`Speaker_Class.hpp`）を元に `main/player.cpp` で実装した。**ESP-IDF v5.5.6 でのビルドは成功した。実機での動作（音が出ること、音切れがないこと）は未確認**。
+SD カード上の WAV のように、メモリに収まらない音声は、小さなバッファに分けて `playRaw` で順に渡す。PSRAM がないので（2 章）、バッファは内部 SRAM に取る。M5Unified のヘッダの記述（`Speaker_Class.hpp`）を元に `main/audio/player.cpp` で実装した。**ESP-IDF v5.5.6 でのビルドは成功した。実機での動作（音が出ること、音切れがないこと）は未確認**。
 
 - `player::start(path, info)` が再生専用の FreeRTOS タスクを作る。タスクは `wav::parse()` が返した `dataOffset` / `dataBytes` から `data` チャンクの範囲だけを読む。`playRaw` はキューが埋まると待つので、キー入力と描画を行う `app_main` のタスクとは別にした。
 - バッファは `static int16_t buf[3][2048]`（要素数 2048 を 3 個、順番に使う）。ファイルから読んだ要素数をそのまま `playRaw(buf[i], n, sampleRate, stereo, 1, 0)` に渡す（channel=0 を明示）。ステレオのときは `stereo=true` とし、1 回に読む要素数は偶数にそろえる。
@@ -333,13 +333,13 @@ esp_err_t ret = esp_vfs_fat_sdspi_mount("/sdcard", &host, &slot_config, &mount_c
 - 失敗したとき、`ESP_FAIL` はファイルシステムのマウント失敗、それ以外はカードの初期化失敗。
 - `format_if_mount_failed=false` なので、未フォーマットのカードは自動では初期化されない。
 - 失敗時は、`spi_bus_initialize` 自体の失敗と、マウントの失敗（上記）のどちらも `esp_err_t` をログに出す。マウント失敗時は `spi_bus_free` でバスを解放する。
-- このリポジトリでは `main/sdcard.cpp` に実装済みで、SCLK=GPIO40、MOSI=GPIO14、MISO=GPIO39、CS=GPIO12 で `/sdcard` にマウントする（`sdcard::begin()`、1 回だけ）。`main/app/playlist.cpp` が `/sdcard` の WAV の一覧を取る。失敗の理由は `begin(char *err, size_t errSize)` で返し、画面への表示は `main/startup.cpp` の `fail()` が行う。`startup::run()` から `M5.begin()` の後に呼ぶ。
+- このリポジトリでは `main/device/sdcard.cpp` に実装済みで、SCLK=GPIO40、MOSI=GPIO14、MISO=GPIO39、CS=GPIO12 で `/sdcard` にマウントする（`sdcard::begin()`、1 回だけ）。`main/app/playlist.cpp` が `/sdcard` の WAV の一覧を取る。失敗の理由は `begin(char *err, size_t errSize)` で返し、画面への表示は `main/startup.cpp` の `fail()` が行う。`startup::run()` から `M5.begin()` の後に呼ぶ。
 - 長いファイル名を読めるように、`sdkconfig.defaults` で `CONFIG_FATFS_LFN_HEAP=y` を設定している。
 - **ESP-IDF v5.5.6 でのビルドは成功した。実機での動作（マウント、WAV 一覧の表示、ディスプレイが乱れないこと）は未確認**。
 
 ### 9.1 WAV ヘッダの解析と一覧からの選択
 
-- `main/wav.cpp` の `wav::parse(path, info, err, errSize)` が、ファイルの先頭から RIFF/WAVE のチャンクをたどる。`fmt ` チャンクからサンプルレート・チャンネル数・ビット幅を、`data` チャンクから中身の開始位置とバイト数を取り出す。`LIST` など未知のチャンクはサイズ分を読み飛ばす（サイズが奇数のときは 1 バイトのパディングも飛ばす）。画面表示には依存しない。
+- `main/audio/wav.cpp` の `wav::parse(path, info, err, errSize)` が、ファイルの先頭から RIFF/WAVE のチャンクをたどる。`fmt ` チャンクからサンプルレート・チャンネル数・ビット幅を、`data` チャンクから中身の開始位置とバイト数を取り出す。`LIST` など未知のチャンクはサイズ分を読み飛ばす（サイズが奇数のときは 1 バイトのパディングも飛ばす）。画面表示には依存しない。
 - 対応は 16bit PCM（フォーマットタグ 1）のモノラル / ステレオのみ。非対応の形式、`fmt ` / `data` チャンクが無い、`data` がファイルより長い、などのときは理由の文字列を返す。`fmt ` より前に `data` があるファイルは非対応。
 - 画面は文字サイズ 2 で、見出し `WAV files:` の下に先頭 7 件を出し、選択中の行に `>` を付ける。`j` / `Down` で下、`k` / `Up` で上、`Enter` で決定する。決定するとサンプルレート・チャンネル数・ビット幅・データのバイト数を画面とログに出す（失敗時は理由を画面に出す）。`Esc` で一覧に戻る。
 - **ESP-IDF v5.5.6 でのビルドは成功した。実機での動作（キー操作、実際の WAV の解析結果、画面に収まること）は未確認**。
