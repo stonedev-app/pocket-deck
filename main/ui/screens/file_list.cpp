@@ -1,10 +1,10 @@
-#include "ui/file_list.hpp"
+#include "ui/screens/file_list.hpp"
 
 #include "app/playlist.hpp"
 #include "esp_log.h"
 #include "lvgl.h"
 #include "ui/fonts/font_jp_16.h"
-#include "ui/status_bar.hpp"
+#include "ui/widgets/status_bar.hpp"
 
 namespace file_list {
 
