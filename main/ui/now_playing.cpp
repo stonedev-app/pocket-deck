@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "lvgl.h"
 #include "ui/file_list.hpp"
+#include "ui/fonts/font_jp_16.h"
 #include "ui/status_bar.hpp"
 
 namespace now_playing {
@@ -251,7 +252,7 @@ void create()
     lv_obj_remove_flag(s_root, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(s_root, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(s_root, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_font(s_root, &lv_font_source_han_sans_sc_16_cjk, 0);
+    lv_obj_set_style_text_font(s_root, &font_jp_16, 0);
     lv_obj_set_style_text_color(s_root, lv_color_white(), 0);
     lv_obj_add_event_cb(s_root, onKey, LV_EVENT_KEY, nullptr);
     // 一覧の選択の移動に混ざらないよう、表示している間だけグループに入れる
