@@ -30,6 +30,9 @@ static constexpr uint8_t CHANNEL = 0;      // playRaw に明示するチャン�
 // 同じ 5 だと LVGL の描画に CPU を取られて、音のキューが空になるため
 static constexpr uint32_t TASK_STACK = 4096;
 static constexpr UBaseType_t TASK_PRIORITY = 6;
+// 音の経路（スピーカー・再生用・イコライザーの計算のタスク）はコア 0 に置く。描画（LVGL）はコア 1。
+// SD の読み出しは CPU を使い続けるので、描画と同じコアだと描画が間に合わない（実機で計測、#57）
+static constexpr BaseType_t TASK_CORE = 0;
 static constexpr int STOP_WAIT_MS = 2000;  // stop() がタスクの終了を待つ上限
 // 待ちループの刻み。CONFIG_FREERTOS_HZ=100（1 tick = 10ms）では 5ms が 0 tick になり、
 // vTaskDelay(0) では IDLE が走れずウォッチドッグが発火するため、必ず 1 tick 以上にする
@@ -218,7 +221,8 @@ static void playTask(void *)
 bool begin()
 {
     if (!eqTask &&
-        xTaskCreate(eqTaskFn, "player_eq", EQ_TASK_STACK, NULL, EQ_TASK_PRIORITY, &eqTask) != pdPASS) {
+        xTaskCreatePinnedToCore(eqTaskFn, "player_eq", EQ_TASK_STACK, NULL, EQ_TASK_PRIORITY, &eqTask,
+                                TASK_CORE) != pdPASS) {
         ESP_LOGE(TAG, "eq task create failed");
         eqTask = nullptr;  // イコライザーなしで再生は続ける
     }
@@ -256,7 +260,7 @@ static bool launch(uint32_t offset)
     eqPrepare(playInfo.sampleRate);
     eqClear();
     running = true;
-    if (xTaskCreate(playTask, "player", TASK_STACK, NULL, TASK_PRIORITY, NULL) != pdPASS) {
+    if (xTaskCreatePinnedToCore(playTask, "player", TASK_STACK, NULL, TASK_PRIORITY, NULL, TASK_CORE) != pdPASS) {
         ESP_LOGE(TAG, "task create failed");
         running = false;
         return false;

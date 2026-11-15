@@ -25,6 +25,9 @@ static constexpr int BUF_LINES = 20;
 
 static constexpr uint32_t TASK_STACK = 8192;
 static constexpr UBaseType_t TASK_PRIORITY = 5;
+// 動かすコア。音の経路（スピーカー・再生用のタスク）はコア 0 に置き、描画はコア 1 に分ける。
+// 指定しないと、描画も音もコア 0 に集まり、再生中は描画が間に合わない（実機で計測、#57）
+static constexpr BaseType_t TASK_CORE = 1;
 // lv_timer_handler() を呼ぶ間隔の下限と上限 [ms]。実際の待ち時間は lv_timer_handler() が返す値を使う
 static constexpr uint32_t HANDLER_MIN_MS = 5;
 static constexpr uint32_t HANDLER_MAX_MS = 50;
@@ -159,7 +162,7 @@ bool start(int32_t width, int32_t height, FlushFn flush, PollKeyFn pollKey, Buil
     // タスクを起動する前なので、ここで LVGL を触ってよい
     buildUi();
 
-    if (xTaskCreate(lvglTask, "lvgl", TASK_STACK, nullptr, TASK_PRIORITY, nullptr) != pdPASS) {
+    if (xTaskCreatePinnedToCore(lvglTask, "lvgl", TASK_STACK, nullptr, TASK_PRIORITY, nullptr, TASK_CORE) != pdPASS) {
         ESP_LOGE(TAG, "task create failed");
         return false;
     }
