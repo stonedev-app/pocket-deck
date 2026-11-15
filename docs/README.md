@@ -8,4 +8,9 @@ pocket-deck の文書の目次。内容ごとに、次の 3 つの区分に分�
 
 ## 現在ある文書
 
-- [Cardputer-Adv 周辺機器の使い方](cardputer-adv-peripherals.md): ディスプレイ・キーボード・IMU・スピーカー・マイク・赤外線送信を使うための情報
+- [hardware/](hardware/README.md): Cardputer-Adv のハード構成の早見表と、機器ごとの説明
+  - [ディスプレイ](hardware/display.md)
+  - [キーボード](hardware/keyboard.md)
+  - [スピーカー](hardware/speaker.md)
+  - [SD カード](hardware/sdcard.md)
+  - [電池](hardware/battery.md)
