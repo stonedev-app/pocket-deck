@@ -1,0 +1,3 @@
+node_modules/
+# ダウンロードした元フォント（gen_font.mjs が取得し直せる）
+.cache/
