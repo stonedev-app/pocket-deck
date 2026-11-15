@@ -10,6 +10,8 @@
 ui → app → audio / device → util
 ```
 
+上の層は、すぐ下の層だけでなく、その下の層も直接呼んでよい。ui は、表示のために audio と device を直接呼ぶ（`eq_view` → `spectrum`、`volume_icon` → `volume`、`battery_icon` → `battery`、`ui.cpp` → `display`）。
+
 | 層 | ディレクトリ | 役割 |
 |----|--------------|------|
 | 起動 | `pocket-deck.cpp`, `startup.cpp` | `app_main()` から `startup::run()` を呼び、各モジュールを順に初期化する |
@@ -70,4 +72,4 @@ ui → app → audio / device → util
 | 再生の状態・位置・リピート | `playback` | LVGL のタスクだけ |
 | 再生の実行（読み出し位置など） | `player` | 再生用のタスクと、`playback` を呼ぶ LVGL のタスク |
 | イコライザーのレベル | `spectrum` | 計算用のタスクが書き、LVGL のタスクが読む |
-| 音量の段階・消音 | `volume` | LVGL のタスクが書き、帯の更新も同じタスクが読む |
+| 音量の段階・消音 | `volume` | LVGL のタスクが書き、帯の更新も同じタスクが読む。段階は、保存のときにタイマータスクも読む |

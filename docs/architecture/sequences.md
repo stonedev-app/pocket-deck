@@ -135,7 +135,8 @@ sequenceDiagram
     Note over L: 次の曲へは、キー操作で進む
     L->>NP: onKey()（NextTrack = LV_KEY_RIGHT）
     NP->>PB: playback::next()
-    PB->>P: playback::play(index + 1)
+    PB->>PB: play(index + 1)
+    PB->>P: player::stop() → player::start()
 ```
 
 - 今の実装では、曲が終わっても自動で次の曲には進まない。リピートがオフなら `Stopped` になり、次の曲へはキー操作（→ または l）で進む。
