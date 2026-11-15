@@ -35,7 +35,7 @@ LVGL は、試作ブランチ `feat/lvgl-spike` で、次の 3 点を確認済�
 - 画面は 240x135（RGB565）。PSRAM はなく、内蔵 RAM は 512KB。
 - フラッシュは 8MB、アプリ用パーティションは 3MB（`partitions.csv`）。
 - `CONFIG_FREERTOS_HZ=100`（1 tick = 10ms）。待ち時間は `msToTicks()` を使う（CLAUDE.md 参照）。
-- LVGL 9.5.0。`lvgl_port` は M5 に依存させず、転送の関数 `FlushFn` とキー取得の関数 `PollKeyFn` を引数で受ける（試作のとおり）。M5GFX への依存は `pocket-deck.cpp` に置く。
+- LVGL 9.5.0。`lvgl_port` は M5 に依存させず、転送の関数 `FlushFn` とキー取得の関数 `PollKeyFn` を引数で受ける（試作のとおり）。M5GFX への依存は `main/device/display.cpp` に置く。
 - 日本語のファイル名は、標準の CJK フォント（約 1338 文字）で表示できる範囲に限る。
 
 ## 画面設計

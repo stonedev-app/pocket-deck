@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include <M5Unified.hpp>
 
+#include "task_config.hpp"
 #include "util/ticks.hpp"
 
 // TCA8418 のレジスタ配置とキー配列は docs/cardputer-adv-peripherals.md の 4 章に基づく。
@@ -59,10 +60,6 @@ static const uint8_t kShift[ROWS][COLS] = {
     {S_CTRL, S_OPT, S_ALT, 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', S_SPACE},
 };
 
-// I2C の読み書きとキューへの送信しかしないので、スタックは 4KB で足りる。
-// 優先度は ui のタスクと同じ。ISR の通知で起きたときだけ動くので CPU はほとんど使わない
-static constexpr uint32_t TASK_STACK_SIZE = 4096;
-static constexpr UBaseType_t TASK_PRIORITY = 5;
 static constexpr gpio_num_t INT_PIN = GPIO_NUM_11;  // TCA8418 の INT（Low アクティブ）
 static constexpr TickType_t FALLBACK_PERIOD = msToTicks(100);  // 割り込みを取りこぼした場合の保険
 // INT が Low のままのとき scan() を繰り返す上限。読んでいる最中に連続でキーが来ても
@@ -293,7 +290,9 @@ bool begin()
             ESP_LOGE(TAG, "queue create failed");
             return false;
         }
-        if (xTaskCreate(inputTask, "keyboard", TASK_STACK_SIZE, nullptr, TASK_PRIORITY, &s_task) != pdPASS) {
+        // コアは指定しない（xTaskCreate と同じ。task_config::KEYBOARD.core は CORE_ANY）
+        if (xTaskCreatePinnedToCore(inputTask, "keyboard", task_config::KEYBOARD.stackBytes, nullptr,
+                                    task_config::KEYBOARD.priority, &s_task, task_config::KEYBOARD.core) != pdPASS) {
             ESP_LOGE(TAG, "task create failed");
             vQueueDelete(s_queue);
             s_queue = nullptr;
