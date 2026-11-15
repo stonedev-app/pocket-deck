@@ -1,15 +1,13 @@
 #include "esp_log.h"
 #include <M5Unified.hpp>
 
+#include "app/playlist.hpp"
 #include "audio/player.hpp"
 #include "audio/spectrum.hpp"
 #include "audio/volume.hpp"
 #include "device/keyboard.hpp"
 #include "device/sdcard.hpp"
-#include "ui/file_list.hpp"
 #include "ui/lvgl_port.hpp"
-#include "ui/now_playing.hpp"
-#include "ui/status_bar.hpp"
 #include "ui/ui.hpp"
 
 static const char *TAG = "pocket-deck";
@@ -92,20 +90,13 @@ static bool pollKey(lvgl_port::Key &out)
     return toLvglKey(ev, out);
 }
 
-/** @brief 画面の部品を作る（帯と、その下の一覧、再生中の画面） */
-static void buildUi()
-{
-    status_bar::create();
-    file_list::create();
-    now_playing::create();
-}
-
 /**
  * @brief 起動時の入口。初期化とタスクの起動だけを行い、あとは画面のタスクに任せる
  *
- * 初期化の順序: M5.begin() → スピーカーと音量 → SD カード → キーボード → 再生 → 画面。
+ * 初期化の順序: M5.begin() → スピーカーと音量 → SD カード → キーボード → イコライザーの計算 →
+ * 再生 → 曲の一覧 → 画面。
  * 後ろのものは前のものに依存する（SPI は M5.begin() の後、音量はスピーカーの後、
- * 画面は keyboard / player のキューができた後）。
+ * 曲の一覧は SD カードの後、画面は keyboard / player のキューと曲の一覧ができた後）。
  * どれかが失敗したら fail() で画面とログに出して return する（以降のタスクは起動しない）。
  */
 extern "C" void app_main(void)
@@ -137,8 +128,11 @@ extern "C" void app_main(void)
     if (!spectrum::begin()) ESP_LOGW(TAG, "spectrum unavailable");
     if (!player::begin()) return fail("player");
 
+    // 曲の一覧を取る。失敗しても 0 件になるだけ（一覧に「(none)」が出る）
+    playlist::load();
+
     // 初期化がすべて成功してから、LVGL を起動する（画面を作って LVGL のタスクを動かす）
-    if (!lvgl_port::start(M5.Display.width(), M5.Display.height(), displayFlush, pollKey, buildUi)) {
+    if (!lvgl_port::start(M5.Display.width(), M5.Display.height(), displayFlush, pollKey, ui::build)) {
         return fail("lvgl");
     }
 }
