@@ -120,6 +120,8 @@ extern "C" void app_main(void)
     M5.Speaker.end();
     auto spk = M5.Speaker.config();
     spk.task_priority = 6;
+    // 音の経路はコア 0 に置く（描画はコア 1。player.cpp の TASK_CORE を参照）
+    spk.task_pinned_core = 0;
     M5.Speaker.config(spk);
     M5.Speaker.begin();
     volume::begin();

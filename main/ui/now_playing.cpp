@@ -48,20 +48,42 @@ static std::string s_path;       // 今の曲のパス（停止後の再生・�
 static wav::Info s_info;
 static uint32_t s_durationMs = 0;
 static lv_obj_t *s_prevFocus = nullptr;  // 一覧で選んでいた行。戻るときに選び直す
-static lv_obj_t *s_eqBars[player::EQ_BANDS];
+static lv_obj_t *s_eq = nullptr;         // イコライザー。棒はすべてこの 1 個の中に描く
 static int s_eqShown[player::EQ_BANDS];  // 表示中のレベル（0〜100）
 
-/** @brief 状態の文字と、時間の文字と、バーを今の再生位置に合わせる */
+/**
+ * @brief 状態の文字と、時間の文字と、バーを今の再生位置に合わせる
+ *
+ * 文字は、表示が変わるときだけ設定する。lv_label_set_text() は同じ文字でも描き直すので、
+ * 周期的に呼ぶたびに設定すると、変わっていない文字の描画で曲名の描画が遅れる（#57）。
+ */
 static void refresh()
 {
+    // 表示中の内容。最初は必ず設定されるよう、ありえない値にしておく
+    static const char *shownState = nullptr;
+    static int shownRepeat = -1;
+    static uint32_t shownPosSec = UINT32_MAX;
+    static uint32_t shownDurSec = UINT32_MAX;
+
     uint32_t pos = s_finished ? s_durationMs : player::positionMs();
     if (pos > s_durationMs) pos = s_durationMs;
     const char *st = s_state_v == State::Playing ? "再生中" : s_state_v == State::Paused ? "一時停止" : "停止";
-    lv_label_set_text(s_state, st);
-    lv_label_set_text(s_repeatMark, s_repeat ? "リピート" : "");
-    lv_label_set_text_fmt(s_time, "%02u:%02u / %02u:%02u", (unsigned)(pos / 60000),
-                          (unsigned)(pos / 1000 % 60), (unsigned)(s_durationMs / 60000),
-                          (unsigned)(s_durationMs / 1000 % 60));
+    if (st != shownState) {
+        shownState = st;
+        lv_label_set_text(s_state, st);
+    }
+    if ((int)s_repeat != shownRepeat) {
+        shownRepeat = s_repeat;
+        lv_label_set_text(s_repeatMark, s_repeat ? "リピート" : "");
+    }
+    const uint32_t posSec = pos / 1000;
+    const uint32_t durSec = s_durationMs / 1000;
+    if (posSec != shownPosSec || durSec != shownDurSec) {
+        shownPosSec = posSec;
+        shownDurSec = durSec;
+        lv_label_set_text_fmt(s_time, "%02u:%02u / %02u:%02u", (unsigned)(posSec / 60),
+                              (unsigned)(posSec % 60), (unsigned)(durSec / 60), (unsigned)(durSec % 60));
+    }
     lv_bar_set_value(s_bar, s_durationMs ? (int32_t)((uint64_t)pos * 1000 / s_durationMs) : 0,
                      LV_ANIM_OFF);
 }
@@ -205,12 +227,51 @@ static void poll(lv_timer_t *)
     refresh();
 }
 
-/** @brief player のレベルを読み、棒を更新する。上がるときは速く、下がるときは少しずつ */
+/** @brief レベル（0〜100）を棒の高さ [px] に直す */
+static int eqBarHeight(int level)
+{
+    return level * EQ_H / 100;
+}
+
+/**
+ * @brief イコライザーの棒をまとめて描く
+ *
+ * 棒を 1 本ずつ別の部品にすると、描き直す領域が棒の数だけに分かれ、領域ごとの手間で
+ * 描画が間に合わなくなる（実機で計測、#57）。1 個の部品の中に、全部の棒を四角で描く。
+ */
+static void drawEq(lv_event_t *e)
+{
+    lv_obj_t *obj = lv_event_get_target_obj(e);
+    lv_layer_t *layer = lv_event_get_layer(e);
+    lv_area_t area;
+    lv_obj_get_coords(obj, &area);
+    const int32_t pitch = lv_area_get_width(&area) / player::EQ_BANDS;
+
+    lv_draw_rect_dsc_t rect;
+    lv_draw_rect_dsc_init(&rect);
+    rect.bg_color = lv_color_make(0x40, 0xc0, 0x60);
+    rect.bg_opa = LV_OPA_COVER;
+    for (int b = 0; b < player::EQ_BANDS; b++) {
+        const int h = eqBarHeight(s_eqShown[b]);
+        if (h <= 0) continue;
+        const int32_t x = area.x1 + b * pitch + EQ_GAP / 2;
+        lv_area_t bar = {x, area.y2 - h + 1, x + pitch - EQ_GAP - 1, area.y2};
+        lv_draw_rect(layer, &rect, &bar);
+    }
+}
+
+/**
+ * @brief player のレベルを読み、棒を更新する。上がるときは速く、下がるときは少しずつ
+ *
+ * 描き直すのは、高さが変わった棒を囲む範囲だけ（横は変わった棒の端から端、縦は動いた分）。
+ */
 static void eqPoll(lv_timer_t *)
 {
     if (!s_active) return;
     uint8_t target[player::EQ_BANDS];
     player::eqLevels(target);
+    int first = -1, last = -1;       // 高さが変わった棒の範囲
+    int hMin = EQ_H, hMax = 0;       // 変わった棒の、変わる前後の高さの範囲
     for (int b = 0; b < player::EQ_BANDS; b++) {
         int cur = s_eqShown[b];
         if (target[b] >= cur) {
@@ -220,26 +281,32 @@ static void eqPoll(lv_timer_t *)
             cur -= EQ_FALL;
             if (cur < target[b]) cur = target[b];
         }
-        if (cur == s_eqShown[b]) continue;
+        const int before = eqBarHeight(s_eqShown[b]);
+        const int after = eqBarHeight(cur);
         s_eqShown[b] = cur;
-        const int h = cur * EQ_H / 100;
-        if (h <= 0) {
-            lv_obj_add_flag(s_eqBars[b], LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_obj_remove_flag(s_eqBars[b], LV_OBJ_FLAG_HIDDEN);
-            lv_obj_set_height(s_eqBars[b], h);
-            lv_obj_set_y(s_eqBars[b], EQ_Y + EQ_H - h);
-        }
+        if (before == after) continue;
+        if (first < 0) first = b;
+        last = b;
+        if (before < hMin) hMin = before;
+        if (after < hMin) hMin = after;
+        if (before > hMax) hMax = before;
+        if (after > hMax) hMax = after;
     }
+    if (first < 0) return;
+
+    lv_area_t area;
+    lv_obj_get_coords(s_eq, &area);
+    const int32_t pitch = lv_area_get_width(&area) / player::EQ_BANDS;
+    lv_area_t dirty = {area.x1 + first * pitch, area.y2 - hMax + 1, area.x1 + (last + 1) * pitch - 1,
+                       area.y2 - hMin};
+    lv_obj_invalidate_area(s_eq, &dirty);
 }
 
 /** @brief 棒をすべて 0 に戻す（画面を開くとき） */
 static void eqReset()
 {
-    for (int b = 0; b < player::EQ_BANDS; b++) {
-        s_eqShown[b] = 0;
-        lv_obj_add_flag(s_eqBars[b], LV_OBJ_FLAG_HIDDEN);
-    }
+    for (int b = 0; b < player::EQ_BANDS; b++) s_eqShown[b] = 0;
+    lv_obj_invalidate(s_eq);
 }
 
 void create()
@@ -287,18 +354,14 @@ void create()
     lv_obj_set_style_text_color(s_repeatMark, lv_color_make(0x40, 0xc0, 0x60), 0);
     lv_obj_align(s_repeatMark, LV_ALIGN_TOP_MID, -10, INFO_Y);
 
-    // イコライザー。高さ 0 の間は隠す
-    const int pitch = w / player::EQ_BANDS;
-    for (int b = 0; b < player::EQ_BANDS; b++) {
-        lv_obj_t *bar = lv_obj_create(s_root);
-        lv_obj_remove_style_all(bar);
-        lv_obj_set_width(bar, pitch - EQ_GAP);
-        lv_obj_set_pos(bar, MARGIN + b * pitch + EQ_GAP / 2, EQ_Y + EQ_H);
-        lv_obj_set_style_bg_color(bar, lv_color_make(0x40, 0xc0, 0x60), 0);
-        lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-        lv_obj_add_flag(bar, LV_OBJ_FLAG_HIDDEN);
-        s_eqBars[b] = bar;
-    }
+    // イコライザー。棒は drawEq() が描く
+    s_eq = lv_obj_create(s_root);
+    lv_obj_remove_style_all(s_eq);
+    lv_obj_set_size(s_eq, w, EQ_H);
+    lv_obj_set_pos(s_eq, MARGIN, EQ_Y);
+    lv_obj_remove_flag(s_eq, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(s_eq, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s_eq, drawEq, LV_EVENT_DRAW_MAIN, nullptr);
 
     lv_timer_create(poll, POLL_MS, nullptr);
     lv_timer_create(eqPoll, EQ_POLL_MS, nullptr);
