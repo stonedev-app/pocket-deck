@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "audio/player.hpp"
+#include "audio/spectrum.hpp"
 #include "audio/wav.hpp"
 #include "device/sdcard.hpp"
 #include "esp_log.h"
@@ -49,7 +50,7 @@ static wav::Info s_info;
 static uint32_t s_durationMs = 0;
 static lv_obj_t *s_prevFocus = nullptr;  // 一覧で選んでいた行。戻るときに選び直す
 static lv_obj_t *s_eq = nullptr;         // イコライザー。棒はすべてこの 1 個の中に描く
-static int s_eqShown[player::EQ_BANDS];  // 表示中のレベル（0〜100）
+static int s_eqShown[spectrum::BANDS];  // 表示中のレベル（0〜100）
 
 /**
  * @brief 状態の文字と、時間の文字と、バーを今の再生位置に合わせる
@@ -88,12 +89,18 @@ static void refresh()
                      LV_ANIM_OFF);
 }
 
+/** @brief 溜まっている終了通知を捨てる（自分で止めた・始め直したときの通知を、終了と取り違えないため） */
+static void drainEvents()
+{
+    player::EndReason reason;
+    while (player::receive(reason, 0)) {}
+}
+
 /** @brief 再生を止めて一覧に戻る。止めたときの Stopped の通知は捨てる */
 static void close()
 {
     player::stop();
-    player::EndReason reason;
-    while (player::receive(reason, 0)) {}
+    drainEvents();
     s_active = false;
     s_state_v = State::Stopped;
 
@@ -104,13 +111,6 @@ static void close()
     file_list::setVisible(true);
     if (s_prevFocus) lv_group_focus_obj(s_prevFocus);
     s_prevFocus = nullptr;
-}
-
-/** @brief 溜まっている終了通知を捨てる（自分で止めた・始め直したときの通知を、終了と取り違えないため） */
-static void drainEvents()
-{
-    player::EndReason reason;
-    while (player::receive(reason, 0)) {}
 }
 
 /** @brief 今の曲を最初から再生する（停止後の Space とリピートで使う）。成功で true */
@@ -245,13 +245,13 @@ static void drawEq(lv_event_t *e)
     lv_layer_t *layer = lv_event_get_layer(e);
     lv_area_t area;
     lv_obj_get_coords(obj, &area);
-    const int32_t pitch = lv_area_get_width(&area) / player::EQ_BANDS;
+    const int32_t pitch = lv_area_get_width(&area) / spectrum::BANDS;
 
     lv_draw_rect_dsc_t rect;
     lv_draw_rect_dsc_init(&rect);
     rect.bg_color = lv_color_make(0x40, 0xc0, 0x60);
     rect.bg_opa = LV_OPA_COVER;
-    for (int b = 0; b < player::EQ_BANDS; b++) {
+    for (int b = 0; b < spectrum::BANDS; b++) {
         const int h = eqBarHeight(s_eqShown[b]);
         if (h <= 0) continue;
         const int32_t x = area.x1 + b * pitch + EQ_GAP / 2;
@@ -261,18 +261,18 @@ static void drawEq(lv_event_t *e)
 }
 
 /**
- * @brief player のレベルを読み、棒を更新する。上がるときは速く、下がるときは少しずつ
+ * @brief spectrum のレベルを読み、棒を更新する。上がるときは速く、下がるときは少しずつ
  *
  * 描き直すのは、高さが変わった棒を囲む範囲だけ（横は変わった棒の端から端、縦は動いた分）。
  */
 static void eqPoll(lv_timer_t *)
 {
     if (!s_active) return;
-    uint8_t target[player::EQ_BANDS];
-    player::eqLevels(target);
+    uint8_t target[spectrum::BANDS];
+    spectrum::levels(target);
     int first = -1, last = -1;       // 高さが変わった棒の範囲
     int hMin = EQ_H, hMax = 0;       // 変わった棒の、変わる前後の高さの範囲
-    for (int b = 0; b < player::EQ_BANDS; b++) {
+    for (int b = 0; b < spectrum::BANDS; b++) {
         int cur = s_eqShown[b];
         if (target[b] >= cur) {
             cur = cur + (target[b] - cur + 1) * 3 / 4;  // 差の 3/4 まで一気に上げる
@@ -296,7 +296,7 @@ static void eqPoll(lv_timer_t *)
 
     lv_area_t area;
     lv_obj_get_coords(s_eq, &area);
-    const int32_t pitch = lv_area_get_width(&area) / player::EQ_BANDS;
+    const int32_t pitch = lv_area_get_width(&area) / spectrum::BANDS;
     lv_area_t dirty = {area.x1 + first * pitch, area.y2 - hMax + 1, area.x1 + (last + 1) * pitch - 1,
                        area.y2 - hMin};
     lv_obj_invalidate_area(s_eq, &dirty);
@@ -305,7 +305,7 @@ static void eqPoll(lv_timer_t *)
 /** @brief 棒をすべて 0 に戻す（画面を開くとき） */
 static void eqReset()
 {
-    for (int b = 0; b < player::EQ_BANDS; b++) s_eqShown[b] = 0;
+    for (int b = 0; b < spectrum::BANDS; b++) s_eqShown[b] = 0;
     lv_obj_invalidate(s_eq);
 }
 

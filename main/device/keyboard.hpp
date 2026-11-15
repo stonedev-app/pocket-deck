@@ -3,22 +3,12 @@
 #include <stdint.h>
 
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
-#include "freertos/queue.h"
 
 // Cardputer-Adv キーボード（TCA8418）の入力処理。表示には依存しない。
 // 使い方: begin() が入力タスクとキューを作る。poll() でキューからイベントを待って取り出す。
 // イベントは「押された瞬間」だけ（離上や押しっぱなしは出さない）。
-// 他のキューと一緒に待ちたいときは、queue() のハンドルを QueueSet に入れる。
 
 namespace keyboard {
-
-/**
- * @brief イベントのキューの長さ
- *
- * 満杯のときは新しいイベントを捨てる。
- * QueueSet の大きさを決める側（ui.cpp）が合計に使う。
- */
-constexpr int QUEUE_SIZE = 16;
 
 /** @brief 押されたキーの種類。Fn 層の変換（Fn + ; で Up など）を適用した後の値 */
 enum class Key : uint8_t {
@@ -33,7 +23,7 @@ enum class Key : uint8_t {
     Down,
     Left,
     Right,
-    Fn,         // ここから下が修飾キー自体。isModifier() が key >= Key::Fn で判定するので並びを変えない
+    Fn,         // ここから下が修飾キー自体
     Shift,
     Ctrl,
     Opt,
@@ -54,10 +44,6 @@ struct KeyEvent {
     Key key;
     char ch;            // key == Key::Char のときの文字（Shift / Fn 適用済み）。それ以外は 0
     uint8_t mods;       // 押された時点の修飾キーの状態（MOD_*）
-    char name[8];       // 表示・ログ用のキー名（例: "a", "A", "Enter", "Esc", "Up"）
-
-    /** @brief 修飾キー（Fn / Shift / Ctrl / Opt / Alt）自体の押下なら true */
-    bool isModifier() const { return key >= Key::Fn; }
 };
 
 /**
@@ -79,12 +65,5 @@ bool begin();
  * @return イベントを取れたら true、時間内に取れなければ false
  */
 bool poll(KeyEvent &out, TickType_t timeout);
-
-/**
- * @brief イベントのキューのハンドルを返す
- *
- * QueueSet に入れて待つためのもの。取り出しは poll() で行う。begin() が成功する前は nullptr。
- */
-QueueHandle_t queue();
 
 }  // namespace keyboard

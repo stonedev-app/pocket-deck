@@ -1,7 +1,5 @@
 #include "device/keyboard.hpp"
 
-#include <string.h>
-
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -70,6 +68,7 @@ static constexpr TickType_t FALLBACK_PERIOD = msToTicks(100);  // 割り込み�
 // INT が Low のままのとき scan() を繰り返す上限。読んでいる最中に連続でキーが来ても
 // 入力タスクが抜けられなくなるのを防ぐ（取り切れない分は保険の周期で拾う）
 static constexpr int MAX_RESCAN = 4;
+static constexpr int QUEUE_SIZE = 16;  // イベントのキューの長さ
 static QueueHandle_t s_queue = nullptr;
 static TaskHandle_t s_task = nullptr;
 static uint8_t s_mods = 0;  // 入力タスクだけが扱うので排他制御は不要
@@ -82,20 +81,11 @@ static void push(const KeyEvent &ev)
     }
 }
 
-/** @brief ev.name にキー名を設定する。name[] に収まらない分は切り詰めて終端する */
-static void setName(KeyEvent &ev, const char *name)
-{
-    strncpy(ev.name, name, sizeof(ev.name) - 1);
-    ev.name[sizeof(ev.name) - 1] = '\0';
-}
-
-/** @brief ev を文字キー（Key::Char）にして、ch と name に c を設定する */
+/** @brief ev を文字キー（Key::Char）にして、ch に c を設定する */
 static void setChar(KeyEvent &ev, char c)
 {
     ev.key = Key::Char;
     ev.ch = c;
-    ev.name[0] = c;
-    ev.name[1] = '\0';
 }
 
 /** @brief 配列中の特殊キーを MOD_* のビットへ変換する。修飾キーでなければ 0 */
@@ -121,12 +111,12 @@ static uint8_t modBit(uint8_t sp)
 static bool fnLayer(uint8_t base, KeyEvent &ev)
 {
     switch (base) {
-    case ';':   ev.key = Key::Up;     setName(ev, "Up");     return true;
-    case ',':   ev.key = Key::Left;   setName(ev, "Left");   return true;
-    case '.':   ev.key = Key::Down;   setName(ev, "Down");   return true;
-    case '/':   ev.key = Key::Right;  setName(ev, "Right");  return true;
-    case '`':   ev.key = Key::Esc;    setName(ev, "Esc");    return true;
-    case S_DEL: ev.key = Key::Delete; setName(ev, "Delete"); return true;
+    case ';':   ev.key = Key::Up;     return true;
+    case ',':   ev.key = Key::Left;   return true;
+    case '.':   ev.key = Key::Down;   return true;
+    case '/':   ev.key = Key::Right;  return true;
+    case '`':   ev.key = Key::Esc;    return true;
+    case S_DEL: ev.key = Key::Delete; return true;
     default:
         if (base >= 'a' && base <= 'z') {  // Fn + 英字は大文字
             setChar(ev, (char)(base - 'a' + 'A'));
@@ -183,11 +173,11 @@ static void handleEvent(uint8_t raw)
 
     if (bit) {
         switch (base) {
-        case S_FN:    ev.key = Key::Fn;    setName(ev, "Fn");    break;
-        case S_SHIFT: ev.key = Key::Shift; setName(ev, "Shift"); break;
-        case S_CTRL:  ev.key = Key::Ctrl;  setName(ev, "Ctrl");  break;
-        case S_OPT:   ev.key = Key::Opt;   setName(ev, "Opt");   break;
-        default:      ev.key = Key::Alt;   setName(ev, "Alt");   break;
+        case S_FN:    ev.key = Key::Fn;    break;
+        case S_SHIFT: ev.key = Key::Shift; break;
+        case S_CTRL:  ev.key = Key::Ctrl;  break;
+        case S_OPT:   ev.key = Key::Opt;   break;
+        default:      ev.key = Key::Alt;   break;
         }
         push(ev);
         return;
@@ -197,11 +187,11 @@ static void handleEvent(uint8_t raw)
     if (!((s_mods & MOD_FN) && fnLayer(base, ev))) {
         const uint8_t c = (s_mods & MOD_SHIFT) ? kShift[row][col] : base;
         switch (c) {
-        case S_DEL:   ev.key = Key::Backspace; setName(ev, "Backspace"); break;
-        case S_TAB:   ev.key = Key::Tab;       setName(ev, "Tab");       break;
-        case S_ENTER: ev.key = Key::Enter;     setName(ev, "Enter");     break;
-        case S_SPACE: ev.key = Key::Space;     setName(ev, "Space");     break;
-        default:      setChar(ev, (char)c);                              break;
+        case S_DEL:   ev.key = Key::Backspace; break;
+        case S_TAB:   ev.key = Key::Tab;       break;
+        case S_ENTER: ev.key = Key::Enter;     break;
+        case S_SPACE: ev.key = Key::Space;     break;
+        default:      setChar(ev, (char)c);    break;
         }
     }
     push(ev);
@@ -298,7 +288,7 @@ bool begin()
     s_mods = 0;  // 再初期化で、押されたままだった修飾キーの状態を捨てる
 
     if (!s_queue) {  // 2 回目以降はタスクと割り込みを作り直さない
-        s_queue = xQueueCreate(QUEUE_SIZE, sizeof(KeyEvent));
+        s_queue = xQueueCreate(QUEUE_SIZE, sizeof(KeyEvent));  // 満杯のときは新しいイベントを捨てる
         if (!s_queue) {
             ESP_LOGE(TAG, "queue create failed");
             return false;
@@ -327,11 +317,6 @@ bool poll(KeyEvent &out, TickType_t timeout)
         return false;
     }
     return xQueueReceive(s_queue, &out, timeout) == pdTRUE;
-}
-
-QueueHandle_t queue()
-{
-    return s_queue;
 }
 
 }  // namespace keyboard

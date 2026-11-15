@@ -2,6 +2,7 @@
 #include <M5Unified.hpp>
 
 #include "audio/player.hpp"
+#include "audio/spectrum.hpp"
 #include "audio/volume.hpp"
 #include "device/keyboard.hpp"
 #include "device/sdcard.hpp"
@@ -132,6 +133,8 @@ extern "C" void app_main(void)
     // M5.Display に直接出して終えるのが安全（fail() 参照）
     if (!sdcard::begin()) return fail("sdcard");
     if (!keyboard::begin()) return fail("keyboard");
+    // イコライザーの計算のタスク。失敗しても棒が動かないだけなので、再生は続ける
+    if (!spectrum::begin()) ESP_LOGW(TAG, "spectrum unavailable");
     if (!player::begin()) return fail("player");
 
     // 初期化がすべて成功してから、LVGL を起動する（画面を作って LVGL のタスクを動かす）
