@@ -15,7 +15,7 @@
 | `display::width()` / `display::height()` | 画面の幅と高さ。`M5.begin()` の後に呼ぶ |
 | `display::flush(x, y, w, h, pixels)` | 描いた領域（RGB565）を画面に転送する。`M5.Display.pushImage()` を `startWrite()` / `endWrite()` で挟み、戻るまでに転送を終える |
 
-描画は LVGL が行う。`main/ui/ui.cpp` が `display::flush` を `lvgl_port::start()` に渡し、LVGL の描画バッファの内容がこの関数で画面に出る。LVGL の描画バッファは、画面全体ではなく数行ぶんで、内部 SRAM に取る（`main/ui/lvgl_port.cpp`）。
+描画は LVGL が行う。`main/ui/ui.cpp` が `display::flush` を `lvgl_port::start()` に渡し、LVGL の描画バッファの内容がこの関数で画面に出る。LVGL の描画バッファは、画面全体（135 行）ではなく 40 行ぶんで、内部 SRAM に取る（`main/ui/lvgl_port.cpp` の `BUF_LINES`）。
 
 初期化に失敗したときだけ、LVGL を起動する前なので、`main/ui/ui.cpp` の `ui::showError()` が `M5.Display` へ直接文字を出す。
 

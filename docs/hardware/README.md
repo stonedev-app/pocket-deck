@@ -15,7 +15,7 @@ M5Stack Cardputer-Adv（ESP32-S3）のうち、pocket-deck が使う部品の説
 そのほか、次の点が前提になる。
 
 - 内部 I2C バスは SCL=GPIO9、SDA=GPIO8。キーボード（TCA8418）がつながっている。このバスは M5Unified が `M5.In_I2C` として管理する。
-- SoC は ESP32-S3FN8（フラッシュ 8MB）。`sdkconfig.defaults` で `CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y` を設定し、`partitions.csv` を 8MB 前提で組んでいる。PSRAM は使っていない（`sdkconfig.defaults` に有効化の設定がない）ので、バッファは内部 SRAM に取る。
+- SoC は ESP32-S3FN8（フラッシュ 8MB）。`sdkconfig.defaults` で `CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y` を設定し、`partitions.csv` を 8MB 前提で組んでいる。この型番は PSRAM を内蔵しないので、バッファは内部 SRAM に取る。
 - M5Unified が `M5.begin()` でボードを判定し、ディスプレイ・内部 I2C・スピーカー・電池を初期化する。そのため、各機器を使う前に `M5.begin()` を呼ぶ。
 - 起動時の初期化の順序は `main/startup.cpp` の `startup::run()` に書いてある。`M5.begin()` → スピーカーと音量 → SD カード → キーボード → … の順。
 
@@ -27,7 +27,7 @@ M5Stack Cardputer-Adv（ESP32-S3）のうち、pocket-deck が使う部品の説
   - `main/hal/hal_config.h`: ピン定義
   - `main/hal/hal.cpp`: SPI バスと SD カードのマウント
   - `main/hal/keyboard/`、`main/hal/utils/adafruit_tca8418/`: キーボードのドライバ
-- M5Unified: https://github.com/m5stack/M5Unified （`src/M5Unified.cpp` にボードごとのピンとコーデックの設定がある）
+- M5Unified: https://github.com/m5stack/M5Unified （`src/M5Unified.inl` にボードごとのピンとコーデックの設定がある）
 - M5GFX: https://github.com/m5stack/M5GFX
 - 製品ページ: https://docs.m5stack.com/en/products/sku/K132-Adv
 - TCA8418 のデータシート（TI）

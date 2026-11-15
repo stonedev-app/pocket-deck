@@ -32,7 +32,7 @@ SD カード上の WAV は、メモリに収まらないので、小さなバッ
 
 - `player::start()` が再生専用のタスクを作る。タスクは `wav::parse()` が返した `data` チャンクの範囲だけを読む。
 - バッファは `int16_t` の 2048 要素を 3 個、順番に使う。読んだ要素数を `playRaw(buf[i], n, sampleRate, stereo, 1, CHANNEL)` に渡す。チャンネルは 0 を明示する。ステレオのときは、1 回に読む要素数を偶数にそろえる。
-- 最後まで読んだら、`M5.Speaker.isPlaying(0)` が偽になるまで待って終える。終了の理由（`Finished` / `Stopped` / `Failed`）を、キュー（長さ 4）で `app_main` 側へ知らせる。
+- 最後まで読んだら、`M5.Speaker.isPlaying(0)` が偽になるまで待って終える。終了の理由（`Finished` / `Stopped` / `Failed`）を、キュー（長さ 4）で知らせる。受け取るのは `main/app/playback.cpp`（`player::receive()`）。
 - `player::stop()` は停止の要求を立て、`M5.Speaker.stop(0)` でキューを空にし、タスクの終了を待つ（上限 2 秒）。
 - 対応する WAV は、16bit PCM のモノラル / ステレオのみ（`wav::parse()` が、それ以外の形式の理由を返す）。
 
