@@ -9,6 +9,7 @@
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/task.h"
 #include "lvgl.h"
+#include "task_config.hpp"
 #include "util/ticks.hpp"
 
 namespace lvgl_port {
@@ -25,11 +26,6 @@ static PollKeyFn s_pollKey = nullptr;
 // イコライザーが 1〜2 回で描けるよう、20 行から増やした（#57）
 static constexpr int BUF_LINES = 40;
 
-static constexpr uint32_t TASK_STACK = 8192;
-static constexpr UBaseType_t TASK_PRIORITY = 5;
-// 動かすコア。音の経路（スピーカー・再生用のタスク）はコア 0 に置き、描画はコア 1 に分ける。
-// 指定しないと、描画も音もコア 0 に集まり、再生中は描画が間に合わない（実機で計測、#57）
-static constexpr BaseType_t TASK_CORE = 1;
 // lv_timer_handler() を呼ぶ間隔の下限と上限 [ms]。実際の待ち時間は lv_timer_handler() が返す値を使う
 static constexpr uint32_t HANDLER_MIN_MS = 5;
 static constexpr uint32_t HANDLER_MAX_MS = 50;
@@ -55,29 +51,6 @@ static void flushCb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 }
 
 /**
- * @brief 操作を LVGL のキー（LV_KEY_*）に変換する
- *
- * 項目間の選択の移動は LV_KEY_NEXT / LV_KEY_PREV で行う（LV_KEY_UP / DOWN は項目の中身の
- * スクロールに使われ、選択は動かない）。
- */
-static uint32_t toLvKey(Key key)
-{
-    switch (key) {
-    case Key::Next:  return LV_KEY_NEXT;
-    case Key::Prev:  return LV_KEY_PREV;
-    case Key::Enter: return LV_KEY_ENTER;
-    case Key::Esc:   return LV_KEY_ESC;
-    // 以下は項目の移動に使わない（再生中の画面ではフォーカスを固定しているので、
-    // LV_KEY_NEXT / PREV は使えず、画面のイベントまで届く別のキーに割り当てる）
-    case Key::PlayPause: return ' ';
-    case Key::NextTrack: return LV_KEY_RIGHT;
-    case Key::PrevTrack: return LV_KEY_LEFT;
-    case Key::Repeat:    return 'r';
-    }
-    return 0;
-}
-
-/**
  * @brief LVGL のキー入力デバイスの読み出し
  *
  * キーボードは「押された瞬間」しか出さない（離上は出ない）ので、1 件取れたら押下を返し、
@@ -95,9 +68,9 @@ static void keypadReadCb(lv_indev_t *, lv_indev_data_t *data)
         releasePending = false;
         return;
     }
-    Key key;
+    uint32_t key;
     if (s_pollKey(key)) {
-        lastKey = toLvKey(key);
+        lastKey = key;
         releasePending = true;
         data->key = lastKey;
         data->state = LV_INDEV_STATE_PRESSED;
@@ -164,7 +137,8 @@ bool start(int32_t width, int32_t height, FlushFn flush, PollKeyFn pollKey, Buil
     // タスクを起動する前なので、ここで LVGL を触ってよい
     buildUi();
 
-    if (xTaskCreatePinnedToCore(lvglTask, "lvgl", TASK_STACK, nullptr, TASK_PRIORITY, nullptr, TASK_CORE) != pdPASS) {
+    if (xTaskCreatePinnedToCore(lvglTask, "lvgl", task_config::LVGL.stackBytes, nullptr,
+                                task_config::LVGL.priority, nullptr, task_config::LVGL.core) != pdPASS) {
         ESP_LOGE(TAG, "task create failed");
         return false;
     }

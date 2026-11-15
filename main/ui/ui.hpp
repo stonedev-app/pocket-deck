@@ -1,19 +1,23 @@
 #pragma once
 
-// 起動失敗の表示。通常の画面は LVGL（status_bar / file_list / now_playing）が描く
+// 画面の起動と、起動失敗の表示。通常の画面は LVGL（status_bar / file_list / now_playing）が描く
 namespace ui {
 
 /**
- * @brief 画面の部品を作る（帯と、その下の一覧、再生中の画面）。画面の切り替えもここで受け持つ
+ * @brief 画面を起動する（LVGL を初期化し、帯・一覧・再生中の画面を作って、LVGL のタスクを動かす）
  *
- * playlist::load() の後、LVGL のタスクを起動する前に、lvgl_port から 1 回だけ呼ばれる。
+ * 画面の切り替えもここで受け持つ。keyboard / player のキューと、曲の一覧（playlist::load()）が
+ * できた後に、1 回だけ呼ぶ。
+ *
+ * @return 成功なら true
  */
-void build();
+bool start();
 
 /**
  * @brief 起動時の失敗を画面に出す。LVGL を起動する前だけ使う
  *
  * M5.Display に直接描くので、LVGL が動いた後に呼ぶと描画が競合する。
+ * 文字の大きさもここで設定する。
  *
  * @param[in] msg 失敗した箇所の名前
  */

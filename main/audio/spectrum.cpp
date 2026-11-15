@@ -6,6 +6,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/task.h"
+#include "task_config.hpp"
 
 namespace spectrum {
 
@@ -19,13 +20,7 @@ static constexpr float F_MAX = 8000.0f;   // 最も高い帯域の中心周波�
 static constexpr float DB_FLOOR = -60.0f; // この dB 以下をレベル 0 にする（フルスケールの正弦波が 0 dB）
 static constexpr float DB_CEIL = -12.0f;  // この dB 以上をレベル 100 にする
 
-// 計算は専用のタスクで行う。優先度は、スピーカー・再生用のタスク（6）> LVGL（5）> この計算（1）の順。
-// 計算は 1 回に約 6ms（最大約 12ms、実機で計測）かかるので、音の経路より低くして、音を優先する。
-// 計算が間に合わなければ、そのチャンクは捨てる（棒の動きが粗くなるだけ）
-static constexpr UBaseType_t TASK_PRIORITY = 1;
-static constexpr uint32_t TASK_STACK = 3072;
-// 音の経路（スピーカー・再生用・この計算のタスク）はコア 0 に置く。描画（LVGL）はコア 1（#57）
-static constexpr BaseType_t TASK_CORE = 0;
+// 計算は専用のタスクで行う（優先度・コア・スタックは task_config.hpp）
 
 static float s_mono[WINDOW];                 // 窓のモノラル化したデータ。計算のタスクだけが使う
 static int16_t s_copy[WINDOW * 2];           // submit() が渡す窓のコピー（ステレオなら L/R 交互）
@@ -93,8 +88,8 @@ static void taskFn(void *)
 bool begin()
 {
     if (s_task) return true;
-    if (xTaskCreatePinnedToCore(taskFn, "spectrum", TASK_STACK, NULL, TASK_PRIORITY, &s_task, TASK_CORE) !=
-        pdPASS) {
+    if (xTaskCreatePinnedToCore(taskFn, "spectrum", task_config::SPECTRUM.stackBytes, NULL,
+                                task_config::SPECTRUM.priority, &s_task, task_config::SPECTRUM.core) != pdPASS) {
         ESP_LOGE(TAG, "task create failed");
         s_task = nullptr;
         return false;

@@ -19,27 +19,15 @@ namespace lvgl_port {
  */
 using FlushFn = void (*)(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t *pixels);
 
-/** @brief LVGL に渡す操作。キーボードの種類に依存しないよう、意味だけで表す */
-enum class Key : uint8_t {
-    Next,   // 次の項目へ選択を移す
-    Prev,   // 前の項目へ選択を移す
-    Enter,  // 選んだ項目を決定する
-    Esc,    // 戻る
-    PlayPause,  // 一時停止 / 再開（停止中は最初から再生）
-    NextTrack,  // 次の曲
-    PrevTrack,  // 前の曲
-    Repeat,     // 1 曲リピートの切り替え
-};
-
 /**
- * @brief 押された操作を 1 件取り出す関数。呼び出し側が用意する
+ * @brief 押されたキーを 1 件取り出す関数。呼び出し側が用意する
  *
  * LVGL のタスクの中から呼ばれるので、待たずに戻ること。キーボードは「押された瞬間」だけを出せばよい。
  *
- * @param[out] key 取り出した操作
+ * @param[out] key 取り出したキーの LVGL のキーコード（LV_KEY_* や文字）
  * @return 取れたら true、なければ false
  */
-using PollKeyFn = bool (*)(Key &key);
+using PollKeyFn = bool (*)(uint32_t &key);
 
 /**
  * @brief 画面の部品を作る関数。呼び出し側が用意する
@@ -56,7 +44,7 @@ using BuildUiFn = void (*)();
  * @param[in] width   画面の幅 [px]
  * @param[in] height  画面の高さ [px]
  * @param[in] flush   描いた領域を画面に転送する関数
- * @param[in] pollKey 押された操作を取り出す関数
+ * @param[in] pollKey 押されたキーを取り出す関数
  * @param[in] buildUi 画面の部品を作る関数
  * @return 成功なら true
  */

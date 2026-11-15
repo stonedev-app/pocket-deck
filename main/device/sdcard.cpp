@@ -1,9 +1,10 @@
 #include "device/sdcard.hpp"
 
+#include <stdio.h>
+
 #include "driver/sdspi_host.h"
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
-#include <M5Unified.hpp>
 
 // SPI 接続とマウントの手順は docs/cardputer-adv-peripherals.md の 9 章に基づく。
 
@@ -22,9 +23,9 @@ static bool mounted = false;
 /**
  * @brief SPI バスを初期化して SD カードを MOUNT_POINT にマウントする
  *
- * 失敗したときは画面とログにエラーを出し、初期化した SPI バスを解放して false を返す。
+ * 失敗したときは、ログにエラーを出し、理由を err に書き、初期化した SPI バスを解放して false を返す。
  */
-static bool mount()
+static bool mount(char *err, size_t errSize)
 {
     // SD カードは SDMMC ではなく SPI モードで配線されているので、SDSPI ホストを使う
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
@@ -41,7 +42,7 @@ static bool mount()
     esp_err_t ret = spi_bus_initialize((spi_host_device_t)host.slot, &bus_cfg, SDSPI_DEFAULT_DMA);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "spi_bus_initialize failed: %s (0x%x)", esp_err_to_name(ret), (unsigned)ret);
-        M5.Display.printf("SPI init failed\n0x%x\n", (unsigned)ret);
+        snprintf(err, errSize, "SPI init failed\n0x%x", (unsigned)ret);
         return false;
     }
 
@@ -63,7 +64,7 @@ static bool mount()
         // ESP_FAIL はファイルシステムのマウント失敗、それ以外はカードの初期化失敗
         const char *kind = (ret == ESP_FAIL) ? "filesystem" : "card init";
         ESP_LOGE(TAG, "mount failed (%s): %s (0x%x)", kind, esp_err_to_name(ret), (unsigned)ret);
-        M5.Display.printf("SD mount failed\n%s\n0x%x\n", kind, (unsigned)ret);
+        snprintf(err, errSize, "SD mount failed\n%s\n0x%x", kind, (unsigned)ret);
         // バスを解放しておく。しないと、再度 begin() したときに spi_bus_initialize が失敗する
         spi_bus_free((spi_host_device_t)host.slot);
         return false;
@@ -73,10 +74,10 @@ static bool mount()
     return true;
 }
 
-bool begin()
+bool begin(char *err, size_t errSize)
 {
     if (mounted) return true;
-    mounted = mount();
+    mounted = mount(err, errSize);
     return mounted;
 }
 

@@ -6,6 +6,7 @@
 #include "app/playlist.hpp"
 #include "lvgl.h"
 #include "ui/fonts/font_jp_16.h"
+#include "ui/keys.hpp"
 #include "ui/widgets/eq_view.hpp"
 #include "ui/widgets/status_bar.hpp"
 
@@ -99,16 +100,16 @@ static void onKey(lv_event_t *e)
     case LV_KEY_ESC:
         close();
         return;
-    case ' ':
+    case ui::keys::PLAY_PAUSE:
         playback::togglePause();
         break;
-    case LV_KEY_RIGHT:  // 端では何もしない
+    case ui::keys::NEXT_TRACK:  // 端では何もしない
         playback::next();
         break;
-    case LV_KEY_LEFT:
+    case ui::keys::PREV_TRACK:
         playback::prev();
         break;
-    case 'r':
+    case ui::keys::REPEAT:
         playback::toggleRepeat();
         break;
     default:

@@ -11,6 +11,7 @@
 #include <M5Unified.hpp>
 
 #include "audio/spectrum.hpp"
+#include "task_config.hpp"
 #include "util/ticks.hpp"
 
 namespace player {
@@ -29,14 +30,6 @@ static constexpr int EVENT_QUEUE_LEN = 4;
 static constexpr int BUF_COUNT = 3;        // バッファの個数。順番に使う
 static constexpr size_t BUF_ELEMS = 2048;  // 1 個あたりの要素数（int16_t）
 static constexpr uint8_t CHANNEL = 0;      // playRaw に明示するチャンネル。音量・停止も同じ番号で操作する
-// ファイル読み出しと playRaw の呼び出しだけなので 4KB で足りる。
-// 優先度はスピーカーのタスクと同じ 6（ui のタスクの 5 より高い）。再開後は SD の読み出しが遅く、
-// 同じ 5 だと LVGL の描画に CPU を取られて、音のキューが空になるため
-static constexpr uint32_t TASK_STACK = 4096;
-static constexpr UBaseType_t TASK_PRIORITY = 6;
-// 音の経路（スピーカー・再生用・イコライザーの計算のタスク）はコア 0 に置く。描画（LVGL）はコア 1。
-// SD の読み出しは CPU を使い続けるので、描画と同じコアだと描画が間に合わない（実機で計測、#57）
-static constexpr BaseType_t TASK_CORE = 0;
 static constexpr int STOP_WAIT_MS = 2000;  // stop() がタスクの終了を待つ上限
 // 待ちループの刻み。CONFIG_FREERTOS_HZ=100（1 tick = 10ms）では 5ms が 0 tick になり、
 // vTaskDelay(0) では IDLE が走れずウォッチドッグが発火するため、必ず 1 tick 以上にする
@@ -146,7 +139,8 @@ static bool launch(uint32_t offset)
     playedBytes = offset;
     spectrum::start(playInfo.sampleRate);
     running = true;
-    if (xTaskCreatePinnedToCore(playTask, "player", TASK_STACK, NULL, TASK_PRIORITY, NULL, TASK_CORE) != pdPASS) {
+    if (xTaskCreatePinnedToCore(playTask, "player", task_config::PLAYER.stackBytes, NULL,
+                                task_config::PLAYER.priority, NULL, task_config::PLAYER.core) != pdPASS) {
         ESP_LOGE(TAG, "task create failed");
         running = false;
         spectrum::stop();
