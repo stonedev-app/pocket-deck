@@ -3,7 +3,6 @@
 #include <stdint.h>
 
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
-#include "freertos/queue.h"
 
 // Cardputer-Adv キーボード（TCA8418）の入力処理。表示には依存しない。
 // 使い方: begin() が入力タスクとキューを作る。poll() でキューからイベントを待って取り出す。

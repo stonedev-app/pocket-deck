@@ -1,7 +1,5 @@
 #include "device/keyboard.hpp"
 
-#include <string.h>
-
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/queue.h"
 #include "freertos/task.h"
