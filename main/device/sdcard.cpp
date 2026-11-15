@@ -6,7 +6,7 @@
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
 
-// SPI 接続とマウントの手順は docs/cardputer-adv-peripherals.md の 9 章に基づく。
+// SPI 接続とマウントの手順は docs/hardware/sdcard.md に基づく。
 
 namespace sdcard {
 

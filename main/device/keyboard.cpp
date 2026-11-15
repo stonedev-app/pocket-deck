@@ -11,8 +11,8 @@
 #include "task_config.hpp"
 #include "util/ticks.hpp"
 
-// TCA8418 のレジスタ配置とキー配列は docs/cardputer-adv-peripherals.md の 4 章に基づく。
-// ライセンスの都合（4.8）で、GPLv3 表記のある keymap.h は使わず、配列は自前で定義している。
+// TCA8418 のレジスタ配置とキー配列は docs/hardware/keyboard.md に基づく。
+// ライセンスの都合（同文書の「注意点」）で、GPLv3 表記のある keymap.h は使わず、配列は自前で定義している。
 
 namespace keyboard {
 
@@ -99,7 +99,7 @@ static uint8_t modBit(uint8_t sp)
 }
 
 /**
- * @brief Fn 層（4.5）の変換を ev に設定する
+ * @brief Fn 層（docs/hardware/keyboard.md）の変換を ev に設定する
  *
  * @param[in]  base 通常時の配列の値
  * @param[out] ev   変換結果を書き込むイベント
@@ -138,7 +138,7 @@ static void handleEvent(uint8_t raw)
     if (v < 0) {  // キー番号 0 は FIFO が空のとき
         return;
     }
-    // TCA8418 の座標から物理配列へ変換（4.3）
+    // TCA8418 の座標から物理配列へ変換
     // キー番号は行ごとに 10 個（COL0〜9）
     const int rawRow = v / 10;
     const int rawCol = v % 10;
@@ -264,7 +264,7 @@ static bool setupInterrupt()
 
 bool begin()
 {
-    // 7 行 × 8 列のキーマトリクスに設定し、イベントバッファを空にする（4.1）
+    // 7 行 × 8 列のキーマトリクスに設定し、イベントバッファを空にする
     // KP_GPIO1 が行（ROW0〜6）、KP_GPIO2 が列（COL0〜7）、KP_GPIO3 の COL8〜9 は使わない
     bool ok = M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_KP_GPIO1, 0x7F, I2C_FREQ);
     ok &= M5.In_I2C.writeRegister8(TCA8418_ADDR, REG_KP_GPIO2, 0xFF, I2C_FREQ);
