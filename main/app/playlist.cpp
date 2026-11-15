@@ -74,12 +74,4 @@ std::string pathAt(int index)
     return std::string(sdcard::MOUNT_POINT) + "/" + name;
 }
 
-int indexOf(const char *name)
-{
-    for (int i = 0; i < (int)s_files.size(); i++) {
-        if (s_files[i] == name) return i;
-    }
-    return -1;
-}
-
 }  // namespace playlist

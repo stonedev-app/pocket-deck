@@ -25,7 +25,4 @@ const char *nameAt(int index);
 /** @brief 一覧の index 番目のファイルのフルパス（"/sdcard/<name>"）。範囲外なら空文字列 */
 std::string pathAt(int index);
 
-/** @brief ファイル名の一覧での位置。なければ -1 */
-int indexOf(const char *name);
-
 }  // namespace playlist
