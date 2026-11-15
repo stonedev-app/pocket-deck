@@ -1,0 +1,12 @@
+{
+  "name": "pocket-deck-font-tools",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.21.0",
+  "scripts": {
+    "gen": "node gen_font.mjs"
+  },
+  "devDependencies": {
+    "lv_font_conv": "1.5.3"
+  }
+}

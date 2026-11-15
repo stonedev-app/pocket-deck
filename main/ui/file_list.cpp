@@ -6,6 +6,7 @@
 #include "device/sdcard.hpp"
 #include "esp_log.h"
 #include "lvgl.h"
+#include "ui/fonts/font_jp_16.h"
 #include "ui/now_playing.hpp"
 #include "ui/status_bar.hpp"
 
@@ -78,8 +79,8 @@ void create()
     lv_obj_set_style_radius(list, 0, 0);
     lv_obj_set_style_bg_color(list, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(list, LV_OPA_COVER, 0);
-    // 日本語のファイル名を出すため、リスト全体（項目に引き継がれる）に CJK フォントを指定する
-    lv_obj_set_style_text_font(list, &lv_font_source_han_sans_sc_16_cjk, 0);
+    // 日本語のファイル名を出すため、リスト全体（項目に引き継がれる）に日本語フォントを指定する
+    lv_obj_set_style_text_font(list, &font_jp_16, 0);
 
     if (s_files.empty()) {
         lv_obj_t *label = lv_label_create(list);
