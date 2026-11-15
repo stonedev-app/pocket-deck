@@ -56,4 +56,4 @@ eim run "idf.py flash monitor"
 
 ## ドキュメント
 
-- [Cardputer-Adv 周辺機器の使い方](docs/cardputer-adv-peripherals.md): ディスプレイ・キーボード・IMU・スピーカー・マイク・赤外線送信を使うための情報
+文書の一覧は [docs/README.md](docs/README.md) を参照。
