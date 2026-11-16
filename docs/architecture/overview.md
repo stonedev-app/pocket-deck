@@ -7,10 +7,16 @@
 依存は上から下へ向かい、下の層は上の層を呼ばない。
 
 ```
-ui → app → audio / device → util
+ui
+↓
+app
+↓
+audio   device     ← 同じ段。互いに呼ばない
+↓
+util
 ```
 
-上の層は、すぐ下の層だけでなく、その下の層も直接呼んでよい。ui は、表示のために audio と device を直接呼ぶ（`eq_view` → `spectrum`、`volume_icon` → `volume`、`battery_icon` → `battery`、`ui.cpp` → `display`）。
+audio と device は同じ段にあり、互いに呼ばない。上の層は、すぐ下の層だけでなく、その下の層も直接呼んでよい。ui は、表示のために audio と device を直接呼ぶ（`eq_view` → `spectrum`、`volume_icon` → `volume`、`battery_icon` → `battery`、`ui.cpp` → `display`）。
 
 | 層 | ディレクトリ | 役割 |
 |----|--------------|------|
