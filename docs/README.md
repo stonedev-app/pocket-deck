@@ -6,7 +6,7 @@
 
 | 文書 | 内容 |
 |------|------|
-| [全体の構成](architecture/overview.md) | 層の構成と、各モジュールの役割 |
+| [全体の構成](architecture/overview.md) | 層の構成と、ファイルごとの役割 |
 | [タスク](architecture/tasks.md) | タスクの優先度・コア・スタックとその理由、タスクの間のキューや通知 |
 | [処理の流れ](architecture/sequences.md) | 起動・再生・音量などのシーケンス図 |
 
