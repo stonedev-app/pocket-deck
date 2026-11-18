@@ -30,7 +30,7 @@ flowchart TB
 | audio | 音 |
 | device | ハードウェア入出力 |
 
-## ファイルの役割
+## 各ファイル
 
 ### ui
 
@@ -75,16 +75,6 @@ flowchart TB
 
 | 名前 | 役割 |
 |------|------|
-| 起動（`pocket-deck.cpp`, `startup.hpp`） | 各部初期化 |
+| `pocket-deck.cpp`, `startup.hpp` | 各部初期化 |
 | `util/` | 共通処理 |
 | `task_config.hpp` | タスク設定 |
-
-## 状態の持ち主
-
-| 状態 | 持ち主 | 読み書きするタスク |
-|------|--------|--------------------|
-| 曲一覧 | `playlist.hpp` | 起動時に書く |
-| 再生状態・位置・リピート | `playback.hpp` | LVGL のタスクだけ |
-| 再生実行 | `player.hpp` | 再生用と、LVGL のタスク |
-| イコライザーレベル | `spectrum.hpp` | 計算用が書き、LVGL が読む |
-| 音量 | `volume.hpp` | LVGL が読み書き。保存はタイマー |
