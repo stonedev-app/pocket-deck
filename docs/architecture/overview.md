@@ -19,6 +19,8 @@ main/
 ```mermaid
 flowchart TB
     ui --> app
+    ui --> audio
+    ui --> device
     app --> audio
     app --> device
 ```
@@ -38,10 +40,14 @@ flowchart TB
 |----------|------|
 | `ui.hpp` | 画面起動 |
 | `lvgl_port.hpp` | LVGL初期化と実行 |
+| `lvgl_util.hpp` | LVGL補助 |
 | `screens/file_list.hpp` | 曲一覧 |
 | `screens/now_playing.hpp` | 再生中画面 |
 | `widgets/status_bar.hpp` | ステータスバー |
+| `widgets/volume_icon.hpp` | 音量表示 |
+| `widgets/battery_icon.hpp` | 電池表示 |
 | `widgets/eq_view.hpp` | イコライザー表示 |
+| `fonts/font_jp_16.h` | 日本語フォント |
 | `keys.hpp` | キー割り当て |
 
 ### app
