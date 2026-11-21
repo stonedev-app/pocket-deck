@@ -10,7 +10,7 @@ sequenceDiagram
     participant SP as 音声の出力
     participant SD as SDカード
     participant K as キーボード
-    participant E as イコライザーの計算
+    participant E as スペクトルアナライザーの計算
     participant PL as 曲一覧
     participant UI as 画面
 
@@ -57,14 +57,14 @@ sequenceDiagram
     end
 ```
 
-## 3. 再生中の音声とイコライザー
+## 3. 再生中の音声とスペクトルアナライザー
 
 ```mermaid
 sequenceDiagram
     participant P as 音声ファイルの読み込み
     participant SD as SDカード
     participant SP as 音声の出力
-    participant E as イコライザーの計算
+    participant E as スペクトルアナライザーの計算
     participant UI as 画面
 
     par 読み込みと計算

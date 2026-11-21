@@ -29,7 +29,7 @@ static void fail(const char *msg)
 }
 
 /**
- * 初期化の順序: M5.begin() → スピーカーと音量 → SD カード → キーボード → イコライザーの計算 →
+ * 初期化の順序: M5.begin() → スピーカーと音量 → SD カード → キーボード → スペクトルアナライザーの計算 →
  * 再生 → 曲の一覧 → 画面。
  * 後ろのものは前のものに依存する（SPI は M5.begin() の後、音量はスピーカーの後、
  * 曲の一覧は SD カードの後、画面は keyboard / player のキューと曲の一覧ができた後）。
@@ -48,7 +48,7 @@ void run()
     char err[64];
     if (!sdcard::begin(err, sizeof(err))) return fail(err);
     if (!keyboard::begin()) return fail("keyboard");
-    // イコライザーの計算のタスク。失敗しても棒が動かないだけなので、再生は続ける
+    // スペクトルアナライザーの計算のタスク。失敗しても棒が動かないだけなので、再生は続ける
     if (!spectrum::begin()) ESP_LOGW(TAG, "spectrum unavailable");
     if (!player::begin()) return fail("player");
 

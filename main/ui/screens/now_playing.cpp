@@ -7,7 +7,7 @@
 #include "lvgl.h"   // IWYU pragma: keep
 #include "ui/fonts/font_jp_16.h"
 #include "ui/keys.hpp"
-#include "ui/widgets/eq_view.hpp"
+#include "ui/widgets/spectrum_view.hpp"
 #include "ui/widgets/status_bar.hpp"
 
 namespace now_playing {
@@ -17,9 +17,9 @@ static constexpr int TITLE_Y = 4;
 static constexpr int BAR_Y = 30;
 static constexpr int BAR_H = 8;
 static constexpr int INFO_Y = 44;
-// イコライザーは INFO_Y の下の空き（高さ 54px）に置く
-static constexpr int EQ_Y = 66;
-static constexpr int EQ_H = 54;
+// スペクトルアナライザーは INFO_Y の下の空き（高さ 54px）に置く
+static constexpr int SPECTRUM_Y = 66;
+static constexpr int SPECTRUM_H = 54;
 // 再生の状態を見る周期 [ms]
 static constexpr uint32_t POLL_MS = 100;
 
@@ -84,7 +84,7 @@ static void close()
 {
     playback::stop();
     s_active = false;
-    eq_view::setActive(false);
+    spectrum_view::setActive(false);
 
     lv_group_t *group = lv_group_get_default();
     lv_group_focus_freeze(group, false);
@@ -172,7 +172,7 @@ void create(CloseFn onClose)
     lv_obj_set_style_text_color(s_repeatMark, lv_color_make(0x40, 0xc0, 0x60), 0);
     lv_obj_align(s_repeatMark, LV_ALIGN_TOP_MID, -10, INFO_Y);
 
-    eq_view::create(s_root, MARGIN, EQ_Y, w, EQ_H);
+    spectrum_view::create(s_root, MARGIN, SPECTRUM_Y, w, SPECTRUM_H);
 
     lv_timer_create(poll, POLL_MS, nullptr);
 }
@@ -181,8 +181,8 @@ void open()
 {
     lv_group_t *group = lv_group_get_default();
     s_active = true;
-    eq_view::reset();
-    eq_view::setActive(true);
+    spectrum_view::reset();
+    spectrum_view::setActive(true);
     refresh();
     lv_obj_remove_flag(s_root, LV_OBJ_FLAG_HIDDEN);
     lv_group_add_obj(group, s_root);
