@@ -14,3 +14,6 @@ managed_components/
 # VSCode / clangd のローカル設定
 .vscode/
 .clangd
+
+# Claude Code の worktree
+.claude/worktrees/
