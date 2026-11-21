@@ -6,7 +6,7 @@
 main/
 ├── ui/                 画面
 ├── app/                アプリ
-├── audio/              音
+├── audio/              音の処理
 ├── device/             ハードウェア入出力
 ├── util/               共通処理
 ├── pocket-deck.cpp     app_main
@@ -18,19 +18,19 @@ main/
 
 ```mermaid
 flowchart TB
-    ui --> app
-    ui --> audio
-    ui --> device
-    app --> audio
-    app --> device
-    audio --> device
+    ui -->|操作| app
+    ui -->|音量・イコライザーの値の取得| audio
+    ui -->|画面への描画・電池残量の取得| device
+    app -->|再生・音量| audio
+    app -->|キー入力・曲の一覧| device
+    audio -->|音を出す| device
 ```
 
 | 名称 | 役割 |
 |----|------|
 | ui | 画面 |
 | app | 曲と再生の管理 |
-| audio | 音 |
+| audio | 音の処理 |
 | device | ハードウェア入出力 |
 
 ## 各ファイル
