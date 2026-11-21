@@ -8,9 +8,9 @@
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include <M5Unified.hpp>
 
 #include "audio/spectrum.hpp"
+#include "device/speaker.hpp"
 #include "task_config.hpp"
 #include "util/ticks.hpp"
 
@@ -88,7 +88,7 @@ static void playTask(void *)
                 break;
             }
             // キューに空きがないときは、空きが出るまでここで待つ
-            M5.Speaker.playRaw(buf[i], n, playInfo.sampleRate, stereo, 1, CHANNEL);
+            speaker::play(buf[i], n, playInfo.sampleRate, stereo, CHANNEL);
             // 映像が音より先に動かないよう、playRaw が戻った（キューに空きができた）後に渡す
             spectrum::submit(buf[i], n, stereo);
             i = (i + 1) % BUF_COUNT;
@@ -96,8 +96,8 @@ static void playTask(void *)
             playedBytes = playedBytes + (uint32_t)(n * sizeof(int16_t));
         }
         // 最後まで読んだら、鳴り終わるまで待つ
-        while (M5.Speaker.isPlaying(CHANNEL) && !stopReq) vTaskDelay(POLL_TICKS);
-        if (stopReq) M5.Speaker.stop(CHANNEL);
+        while (speaker::isPlaying(CHANNEL) && !stopReq) vTaskDelay(POLL_TICKS);
+        if (stopReq) speaker::stop(CHANNEL);
     }
     if (f) fclose(f);
     if (stopReq) reason = EndReason::Stopped;
@@ -201,7 +201,7 @@ void stop()
     stopReq = true;
     // playRaw は内部のキューに空きがないと待つ。タスクがそこで止まっていると stopReq を見られないので、
     // 再生中のデータを捨ててキューを空け、タスクを起こす
-    M5.Speaker.stop(CHANNEL);
+    speaker::stop(CHANNEL);
     for (int waited = 0; running && waited < STOP_WAIT_MS; waited += POLL_MS) {
         vTaskDelay(POLL_TICKS);
     }

@@ -9,7 +9,7 @@ constexpr int MAX_LEVEL = 16;
 /** @brief NVS に保存がない初回起動時の段階。最大では大きすぎるので、低めにしてある */
 constexpr int DEFAULT_LEVEL = 4;
 
-/** @brief NVS から段階を読んで M5.Speaker に反映する。失敗しても既定値で続ける。M5.Speaker.begin() の後に呼ぶ */
+/** @brief NVS から段階を読んで スピーカーに反映する。失敗しても既定値で続ける。speaker::begin() の後に呼ぶ */
 void begin();
 
 /** @brief 1 段上げる。消音中なら解除してから上げる。端では止まる */
