@@ -67,3 +67,8 @@ eim run "idf.py flash monitor"
 ## ドキュメント
 
 文書の一覧は[docs/README.md](docs/README.md)を参照。
+
+## ライセンス
+
+[MIT License](LICENSE)です。
+ただし、日本語フォント（`main/ui/fonts/font_jp_16.c`、Noto Sans JPから生成）は[SIL Open Font License 1.1](main/ui/fonts/OFL.txt)に従います。
