@@ -5,9 +5,9 @@
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "audio/wav.hpp"
 
-// WAV（16bit PCM）の再生。M5.Speaker に playRaw でチャンクを渡す。画面表示には依存しない。
-// 使い方: M5.Speaker.begin() を起動時に 1 回呼んでおく。start() が再生用のタスクを作り、
-// そのタスクがファイルを読んで playRaw に渡す。呼び出し側のタスクは止まらない。
+// WAV（16bit PCM）の再生。device/speaker にチャンクを渡す。画面表示には依存しない。
+// 使い方: speaker::begin() を起動時に 1 回呼んでおく。start() が再生用のタスクを作り、
+// そのタスクがファイルを読んで speaker::play に渡す。呼び出し側のタスクは止まらない。
 // 再生が終わると、再生用のタスクが終了の理由（EndReason）をキューに入れる。
 // 呼び出し側は receive() で取り出す（ui のタイマーが周期的に見る）。
 // イコライザーのレベル計算は audio/spectrum が行う。

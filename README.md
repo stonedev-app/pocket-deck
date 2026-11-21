@@ -10,7 +10,7 @@ M5Stack Cardputer-Adv（ESP32-S3）向けのESP-IDFプロジェクトです。
 
 - `app/`: 再生の制御、曲の一覧、キー入力の変換
 - `audio/`: WAVの再生、音量、イコライザーの計算
-- `device/`: キーボード、SDカード、電池、ディスプレイ
+- `device/`: キーボード、SDカード、電池、ディスプレイ、スピーカー
 - `ui/`: LVGLの画面（`screens/`）と部品（`widgets/`）
 
 ## 環境の準備

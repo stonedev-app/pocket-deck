@@ -23,6 +23,7 @@ flowchart TB
     ui --> device
     app --> audio
     app --> device
+    audio --> device
 ```
 
 | 名称 | 役割 |
@@ -62,7 +63,6 @@ flowchart TB
 
 | ファイル | 役割 |
 |----------|------|
-| `speaker.hpp` | スピーカー起動 |
 | `volume.hpp` | 音量 |
 | `wav.hpp` | WAV解析 |
 | `player.hpp` | 再生 |
@@ -76,6 +76,7 @@ flowchart TB
 | `keyboard.hpp` | キー入力 |
 | `sdcard.hpp` | SDカード |
 | `battery.hpp` | 電池残量 |
+| `speaker.hpp` | スピーカー |
 
 ## その他
 

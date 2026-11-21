@@ -5,11 +5,12 @@
 
 #include "app/playlist.hpp"
 #include "audio/player.hpp"
-#include "audio/speaker.hpp"
 #include "audio/spectrum.hpp"
+#include "audio/volume.hpp"
 #include "device/display.hpp"
 #include "device/keyboard.hpp"
 #include "device/sdcard.hpp"
+#include "device/speaker.hpp"
 #include "ui/ui.hpp"
 
 namespace startup {
@@ -39,8 +40,9 @@ void run()
     M5.begin();
     ESP_LOGI(TAG, "display: %d x %d", (int)display::width(), (int)display::height());
 
-    // スピーカーの初期化は、起動時に 1 回だけ行う（音量の復元も含む）
+    // スピーカーの初期化は、起動時に 1 回だけ行う。音量の復元はスピーカーの起動の後でないと反映されない
     speaker::begin();
+    volume::begin();
 
     // SPI バスの初期化は M5.begin() の後でなければならない（ディスプレイ用 SPI との衝突を避ける）
     char err[64];

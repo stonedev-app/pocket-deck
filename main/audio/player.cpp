@@ -8,9 +8,9 @@
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include <M5Unified.hpp>
 
 #include "audio/spectrum.hpp"
+#include "device/speaker.hpp"
 #include "task_config.hpp"
 #include "util/ticks.hpp"
 
@@ -23,13 +23,13 @@ static const char *TAG = "player";
 // （再生中に次の再生は始められないので、実際には満杯にならない）
 static constexpr int EVENT_QUEUE_LEN = 4;
 
-// playRaw は渡したバッファを再生が終わるまで参照し続け、内部のキューにはポインタしか積まない。
+// speaker::play は渡したバッファを再生が終わるまで参照し続け、内部のキューにはポインタしか積まない。
 // そのため、再生中のバッファを読み込みで上書きしないよう複数個を順番に使う。
 // 1 個 2048 要素（4KB）× 3 個で、SD の読み出しが多少遅れても音が途切れにくい長さを確保しつつ、
 // 内部 SRAM（PSRAM はない）を 12KB に抑える。音切れの有無は実機で調整する
 static constexpr int BUF_COUNT = 3;        // バッファの個数。順番に使う
 static constexpr size_t BUF_ELEMS = 2048;  // 1 個あたりの要素数（int16_t）
-static constexpr uint8_t CHANNEL = 0;      // playRaw に明示するチャンネル。音量・停止も同じ番号で操作する
+static constexpr uint8_t CHANNEL = 0;      // speaker::play に渡すチャンネル。音量・停止も同じ番号で操作する
 static constexpr int STOP_WAIT_MS = 2000;  // stop() がタスクの終了を待つ上限
 // 待ちループの刻み。CONFIG_FREERTOS_HZ=100（1 tick = 10ms）では 5ms が 0 tick になり、
 // vTaskDelay(0) では IDLE が走れずウォッチドッグが発火するため、必ず 1 tick 以上にする
@@ -43,7 +43,7 @@ static std::string playPath;
 static wav::Info playInfo;
 static volatile bool running = false;  // 再生用のタスクが動いている間 true
 static volatile bool stopReq = false;  // stop() からタスクへの停止の要求
-static volatile uint32_t playedBytes = 0;  // playRaw に渡したバイト数（data の先頭から）。再生位置の目安
+static volatile uint32_t playedBytes = 0;  // speaker::play に渡したバイト数（data の先頭から）。再生位置の目安
 static uint32_t startOffset = 0;           // タスクが読み始める data 内の位置 [byte]。再開で 0 以外になる
 static bool paused = false;                // pause() で止めていて、resume() で続けられる間 true
 static QueueHandle_t eventQ = nullptr;  // 終了通知のキュー
@@ -88,16 +88,16 @@ static void playTask(void *)
                 break;
             }
             // キューに空きがないときは、空きが出るまでここで待つ
-            M5.Speaker.playRaw(buf[i], n, playInfo.sampleRate, stereo, 1, CHANNEL);
-            // 映像が音より先に動かないよう、playRaw が戻った（キューに空きができた）後に渡す
+            speaker::play(buf[i], n, playInfo.sampleRate, stereo, CHANNEL);
+            // 映像が音より先に動かないよう、speaker::play が戻った（キューに空きができた）後に渡す
             spectrum::submit(buf[i], n, stereo);
             i = (i + 1) % BUF_COUNT;
             remain -= n;
             playedBytes = playedBytes + (uint32_t)(n * sizeof(int16_t));
         }
         // 最後まで読んだら、鳴り終わるまで待つ
-        while (M5.Speaker.isPlaying(CHANNEL) && !stopReq) vTaskDelay(POLL_TICKS);
-        if (stopReq) M5.Speaker.stop(CHANNEL);
+        while (speaker::isPlaying(CHANNEL) && !stopReq) vTaskDelay(POLL_TICKS);
+        if (stopReq) speaker::stop(CHANNEL);
     }
     if (f) fclose(f);
     if (stopReq) reason = EndReason::Stopped;
@@ -199,9 +199,9 @@ void stop()
 {
     if (!running) return;
     stopReq = true;
-    // playRaw は内部のキューに空きがないと待つ。タスクがそこで止まっていると stopReq を見られないので、
+    // speaker::play は内部のキューに空きがないと待つ。タスクがそこで止まっていると stopReq を見られないので、
     // 再生中のデータを捨ててキューを空け、タスクを起こす
-    M5.Speaker.stop(CHANNEL);
+    speaker::stop(CHANNEL);
     for (int waited = 0; running && waited < STOP_WAIT_MS; waited += POLL_MS) {
         vTaskDelay(POLL_TICKS);
     }

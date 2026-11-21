@@ -6,8 +6,8 @@
 #include "freertos/timers.h"
 #include "nvs.h"
 #include "nvs_flash.h"
-#include <M5Unified.hpp>
 
+#include "device/speaker.hpp"
 #include "util/ticks.hpp"
 
 namespace volume {
@@ -33,11 +33,11 @@ static constexpr uint8_t VOLUME_TABLE[MAX_LEVEL + 1] = {
     6, 8, 10, 13, 16, 21, 27, 35, 44, 57, 73, 94, 120, 154, 198, 255,  // 1〜16 段目
 };
 
-/** @brief 現在の段階と消音を M5.Speaker に反映する。消音中は 0、それ以外は表から引く */
+/** @brief 現在の段階と消音をスピーカーに反映する。消音中は 0、それ以外は表から引く */
 static void apply()
 {
     uint8_t v = s_muted ? 0 : VOLUME_TABLE[s_level];
-    M5.Speaker.setVolume(v);
+    speaker::setVolume(v);
 }
 
 /**

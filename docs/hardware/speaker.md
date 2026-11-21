@@ -5,6 +5,7 @@
 - コーデックES8311を、I2Sでつないでいる。
 - コーデックとI2Sの設定は、M5Unifiedが行う。
 - 音は`M5.Speaker`で出す。
+- `M5.Speaker`は`device/speaker`だけが呼ぶ。
 
 ## 再生の仕組み
 
