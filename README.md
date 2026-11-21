@@ -36,6 +36,16 @@ eim install -i v5.5.6
 eim select v5.5.6
 ```
 
+### VS Codeを使う場合
+
+ESP-IDF拡張機能とclangd拡張機能を入れます。  
+ESP-IDFは、EIMでインストールしたものがそのまま使われます。
+
+コード補完は、ESP-IDFに付属するclangdで行います。  
+コマンドパレットで「ESP-IDF: Configure project for ESP-Clang」を実行すると、  
+その設定（`.vscode/settings.json`と`.clangd`）が作られます。  
+補完はビルド後に効くようになります。
+
 ## 依存ライブラリ
 
 [M5Unified](https://github.com/m5stack/M5Unified)（ディスプレイ描画のM5GFXも依存として含まれます）を使っています。
