@@ -1,5 +1,7 @@
 # pocket-deck
 
+<img src="docs/images/cardputer.jpg" alt="Cardputer-AdvでWAVを再生している画面" width="320">
+
 M5Stack Cardputer-Adv（ESP32-S3）向けのESP-IDFプロジェクトです。
 音楽再生やPodcastなどの音声再生アプリを、複数切り替えて動かすことを目指しています。
 キー操作はvim風にする予定です。
