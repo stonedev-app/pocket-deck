@@ -1,12 +1,12 @@
-#include "ui/widgets/eq_view.hpp"
+#include "ui/widgets/spectrum_view.hpp"
 
 #include "audio/spectrum.hpp"
 #include "ui/lvgl_util.hpp"
 
-namespace eq_view {
+namespace spectrum_view {
 
 static constexpr int GAP = 4;  // 棒の間の隙間 [px]
-// イコライザーを更新する周期 [ms]
+// スペクトルアナライザーを更新する周期 [ms]
 static constexpr uint32_t POLL_MS = 40;
 // 下がるときの 1 回あたりの減り幅（レベル 0〜100）。上がるときは一気に追いつく
 static constexpr int FALL = 8;
@@ -24,7 +24,7 @@ static int barHeight(int level)
 }
 
 /**
- * @brief イコライザーの棒をまとめて描く
+ * @brief スペクトルアナライザーの棒をまとめて描く
  *
  * 棒を 1 本ずつ別の部品にすると、描き直す領域が棒の数だけに分かれ、領域ごとの手間で
  * 描画が間に合わなくなる（実機で計測、#57）。1 個の部品の中に、全部の棒を四角で描く。
@@ -114,4 +114,4 @@ void setActive(bool active)
     s_active = active;
 }
 
-}  // namespace eq_view
+}  // namespace spectrum_view
