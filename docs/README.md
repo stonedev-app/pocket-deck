@@ -25,8 +25,8 @@ Cardputer-Advのうち、pocket-deckが使う部品の説明を書く。
 | 文書 | 内容 |
 |------|------|
 | [ハードウェア](hardware/README.md) | 機器の一覧、前提、参考資料 |
-| [ディスプレイ](hardware/display.md) | 液晶の仕様と、画面への転送 |
+| [ディスプレイ](hardware/display.md) | 仕様と接続、使い方、注意点 |
 | [キーボード](hardware/keyboard.md) | TCA8418のレジスタ、キー配列、Fn層 |
-| [スピーカー](hardware/speaker.md) | つなぎ方、再生の仕組み、音量、注意点 |
-| [SDカード](hardware/sdcard.md) | つなぎ方、使い方、注意点 |
+| [スピーカー](hardware/speaker.md) | 仕様と接続、再生の仕組み、音量、注意点 |
+| [SDカード](hardware/sdcard.md) | 仕様と接続、使い方、注意点 |
 | [電池](hardware/battery.md) | 残量の読み方と、充電状態が取れない注意 |

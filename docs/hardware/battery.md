@@ -1,6 +1,6 @@
 # 電池
 
-## 部品とつなぎ方
+## 仕様と接続
 
 - 電池の残量は、M5Unifiedの`M5.Power`から読む。ピンやアドレスの設定は、M5Unifiedが行う。
 - `M5.Power.getBatteryLevel()`が、残量を`%`で返す。
