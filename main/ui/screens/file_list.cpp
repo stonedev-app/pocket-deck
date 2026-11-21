@@ -2,7 +2,7 @@
 
 #include "app/playlist.hpp"
 #include "esp_log.h"
-#include "lvgl.h"
+#include "lvgl.h"  // IWYU pragma: keep
 #include "ui/fonts/font_jp_16.h"
 #include "ui/widgets/status_bar.hpp"
 
