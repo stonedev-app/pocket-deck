@@ -40,4 +40,4 @@ M5Unified に SD カードの機能はないので、ESP-IDF の API（SDSPI ホ
 - **`M5.begin()` の後に呼ぶ**。SPI バスの初期化が、M5GFX のディスプレイ用の SPI と衝突しないようにするため。
 - `format_if_mount_failed = false` なので、未フォーマットのカードは自動では初期化されない。カード上の WAV を誤って消さないための設定。
 - マウントに失敗したときは、`spi_bus_free()` で SPI バスを解放する。しないと、再度 `begin()` したときに `spi_bus_initialize()` が失敗する。
-- SD の読み出しは CPU を使い続けるので、再生用のタスクは、描画のタスクとは別のコア（コア 0）に置く（`main/task_config.hpp` の `PLAYER`）。
+- SD の読み出しは CPU を使い続けるので、音声ファイルの読み込みのタスクは、描画のタスクとは別のコア（コア 0）に置く（`main/task_config.hpp` の `PLAYER`）。
