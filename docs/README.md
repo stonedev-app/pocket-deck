@@ -16,17 +16,17 @@
 
 | 文書 | 内容 |
 |------|------|
-| [使い方](guide/usage.md) | SD カードの準備、キー操作、画面の見方 |
+| [使い方](guide/usage.md) | SDカードの準備、キー操作、画面の見方 |
 
 ## hardware/
 
-Cardputer-Adv のうち、pocket-deck が使う部品の説明を書く。
+Cardputer-Advのうち、pocket-deckが使う部品の説明を書く。
 
 | 文書 | 内容 |
 |------|------|
 | [ハード構成の早見表](hardware/README.md) | 部品と接続の一覧、共通の注意点、参照元 |
 | [ディスプレイ](hardware/display.md) | 液晶の仕様と、画面への転送 |
-| [キーボード](hardware/keyboard.md) | TCA8418 のレジスタ、キー配列、Fn 層 |
-| [スピーカー](hardware/speaker.md) | 初期化、WAV の再生、音量 |
-| [SD カード](hardware/sdcard.md) | SPI のピンと、マウントの設定 |
+| [キーボード](hardware/keyboard.md) | TCA8418のレジスタ、キー配列、Fn層 |
+| [スピーカー](hardware/speaker.md) | 初期化、WAVの再生、音量 |
+| [SDカード](hardware/sdcard.md) | SPIのピンと、マウントの設定 |
 | [電池](hardware/battery.md) | 残量の読み方と、充電状態が取れない注意 |
