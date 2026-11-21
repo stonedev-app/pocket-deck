@@ -41,9 +41,6 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-          # 調査用: ツール呼び出しの履歴をログに出す。原因が分かったら外す
-          show_full_output: true
-
           # ESP-IDF のビルドを許可する(flash / monitor は実機がないため許可しない)
           claude_args: |
             --allowedTools "Bash(idf.py build),Bash(idf.py size:*),Bash(idf.py reconfigure)"
