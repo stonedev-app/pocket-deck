@@ -4,7 +4,7 @@
 
 #include "app/playback.hpp"
 #include "app/playlist.hpp"
-#include "lvgl.h"
+#include "lvgl.h"   // IWYU pragma: keep
 #include "ui/fonts/font_jp_16.h"
 #include "ui/keys.hpp"
 #include "ui/widgets/eq_view.hpp"

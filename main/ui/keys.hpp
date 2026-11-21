@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#include "lvgl.h"
+#include "lvgl.h" // IWYU pragma: keep
 
 // LVGL のキーコードのうち、アプリ固有の意味を持たせたもの。
 // ui.cpp が操作（input::Action）から変換し、now_playing.cpp が受け取る。

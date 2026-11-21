@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lvgl.h"
+#include "lvgl.h" // IWYU pragma: keep
 
 // 電池の絵。残量は device/battery から一定の周期で読み、変わったときだけ描き直す（LVGL のタスクの中で動く）。
 namespace battery_icon {

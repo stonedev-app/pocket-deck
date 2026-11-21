@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lvgl.h"
+#include "lvgl.h" // IWYU pragma: keep
 
 // イコライザー。棒を 1 個の部品にまとめて描き、変わった範囲だけを描き直す（#57 の対策）。
 // spectrum のレベルを一定の周期で読んで更新する（LVGL のタスクの中で動く）。

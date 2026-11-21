@@ -8,7 +8,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"  // IWYU pragma: keep
 #include "freertos/task.h"
-#include "lvgl.h"
+#include "lvgl.h"               // IWYU pragma: keep
 #include "task_config.hpp"
 #include "util/ticks.hpp"
 

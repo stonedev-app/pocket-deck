@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lvgl.h"
+#include "lvgl.h" // IWYU pragma: keep
 
 // ui/ の共通の小さな道具。
 namespace lvgl_util {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lvgl.h"
+#include "lvgl.h" // IWYU pragma: keep
 
 // 音量の数字とアイコン（スピーカー + 弧、消音のときは暗いスピーカー + 斜線）。
 // volume:: の状態を一定の周期で見て、変わったときだけ描き直す（LVGL のタスクの中で動く）。

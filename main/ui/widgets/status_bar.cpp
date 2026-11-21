@@ -1,6 +1,6 @@
 #include "ui/widgets/status_bar.hpp"
 
-#include "lvgl.h"
+#include "lvgl.h" // IWYU pragma: keep
 #include "ui/lvgl_util.hpp"
 #include "ui/widgets/battery_icon.hpp"
 #include "ui/widgets/volume_icon.hpp"
