@@ -43,6 +43,3 @@ jobs:
       # ターゲット(esp32s3)は sdkconfig.defaults で設定済み
       - name: Build
         run: idf.py build
-
-      - name: Size summary
-        run: idf.py size
