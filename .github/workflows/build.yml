@@ -1,0 +1,48 @@
+name: Build
+
+on:
+  pull_request:
+    paths:
+      - "main/**"
+      - "CMakeLists.txt"
+      - "sdkconfig.defaults"
+      - "partitions.csv"
+      - "dependencies.lock"
+      - ".github/workflows/build.yml"
+  push:
+    branches: [main]
+    paths:
+      - "main/**"
+      - "CMakeLists.txt"
+      - "sdkconfig.defaults"
+      - "partitions.csv"
+      - "dependencies.lock"
+      - ".github/workflows/build.yml"
+
+# 同じ PR / ブランチの古い実行は、新しい push が来たらキャンセルする
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# シークレットは使わず、読み取り権限だけにする
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install ESP-IDF
+        uses: espressif/install-esp-idf-action@v1
+        with:
+          version: v5.5.6
+
+      # ターゲット(esp32s3)は sdkconfig.defaults で設定済み
+      - name: Build
+        run: idf.py build
+
+      - name: Size summary
+        run: idf.py size
