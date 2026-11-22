@@ -1,0 +1,54 @@
+# ファームウェアがビルドできることを確かめる CI。
+# PR と main への push で idf.py build を実行する。
+# Claude を呼ぶワークフローは claude.yml で、こちらとは別。
+name: Build
+
+on:
+  # どのブランチ向けの PR でも実行する
+  pull_request:
+    # ビルドに関係するファイルが変わったときだけ実行する(README や docs だけの変更では動かない)
+    paths:
+      - "main/**"
+      - "CMakeLists.txt"
+      - "sdkconfig.defaults"
+      - "partitions.csv"
+      - "dependencies.lock"
+      - ".github/workflows/build.yml"
+  # マージ後の main でも壊れていないか確かめる
+  push:
+    branches: [main]
+    # pull_request と同じ条件。YAML のアンカーは使わず、素直に重ねて書いている
+    paths:
+      - "main/**"
+      - "CMakeLists.txt"
+      - "sdkconfig.defaults"
+      - "partitions.csv"
+      - "dependencies.lock"
+      - ".github/workflows/build.yml"
+
+# 同じ PR / ブランチの古い実行は、新しい push が来たらキャンセルする
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# シークレットは使わず、読み取り権限だけにする
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # ESP-IDF を導入する。バージョンは README と合わせて v5.5.6 に固定している
+      - name: Install ESP-IDF
+        uses: espressif/install-esp-idf-action@v1
+        with:
+          version: v5.5.6
+
+      # ターゲット(esp32s3)は sdkconfig.defaults で設定済みなので set-target は不要
+      # flash / monitor は実機がないので実行しない
+      - name: Build
+        run: idf.py build
