@@ -1,6 +1,9 @@
 #include "app/input.hpp"
 
+#include <esp_timer.h>
+
 #include "audio/volume.hpp"
+#include "device/display.hpp"
 #include "device/keyboard.hpp"
 
 namespace input {
@@ -51,10 +54,50 @@ static bool toAction(const keyboard::KeyEvent &ev, Action &out)
     }
 }
 
+// 操作がなくなってから、暗くするまで・消すまでの時間（どちらも直前の段階からの経過）
+static constexpr int64_t kDimAfterUs = 30LL * 1000 * 1000;
+static constexpr int64_t kOffAfterUs = 60LL * 1000 * 1000;
+
+/**
+ * @brief 操作がない時間に応じて、バックライトを暗くする・消す
+ *
+ * @param[in] pressed キーが押されたか
+ * @return 画面が暗い・消えていて、このキーを復帰だけに使うなら true
+ */
+static bool updateBacklight(bool pressed)
+{
+    static display::Backlight level = display::Backlight::Full;
+    static int64_t lastActive = esp_timer_get_time();
+
+    int64_t now = esp_timer_get_time();
+    if (pressed) {
+        lastActive = now;
+        if (level != display::Backlight::Full) {
+            level = display::Backlight::Full;
+            display::setBacklight(level);
+            return true;
+        }
+        return false;
+    }
+
+    int64_t idle = now - lastActive;
+    display::Backlight want = idle >= kOffAfterUs ? display::Backlight::Off
+                            : idle >= kDimAfterUs ? display::Backlight::Dim
+                                                  : display::Backlight::Full;
+    if (want != level) {
+        level = want;
+        display::setBacklight(level);
+    }
+    return false;
+}
+
 bool poll(Action &out)
 {
     keyboard::KeyEvent ev;
-    if (!keyboard::poll(ev, 0)) return false;
+    bool pressed = keyboard::poll(ev, 0);
+    // 暗い・消えているときのキーは、画面を戻すだけに使う（音量も変えない）
+    if (updateBacklight(pressed)) return false;
+    if (!pressed) return false;
     if (handleVolumeKey(ev)) return false;
     return toAction(ev, out);
 }

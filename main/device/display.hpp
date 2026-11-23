@@ -11,6 +11,16 @@ int32_t width();
 /** @brief 画面の高さ [px]。M5.begin() の後に呼ぶ */
 int32_t height();
 
+/** @brief バックライトの明るさ */
+enum class Backlight : uint8_t {
+    Full,  // 元の明るさ
+    Dim,   // 暗くする
+    Off,   // 消す
+};
+
+/** @brief バックライトの明るさを切り替える。描画は止めない */
+void setBacklight(Backlight level);
+
 /**
  * @brief 描いた領域を画面に転送する。転送は、戻るまでに終える
  *
