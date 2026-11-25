@@ -103,7 +103,7 @@ static void draw(lv_event_t *e)
 /** @brief 音量の数字（0〜16）を更新する。消音のときは数字を残して、スピーカーと同じ暗い灰色にする */
 static void updateLabel()
 {
-    lv_label_set_text_fmt(s_label, "%d", s_level);
+    lv_label_set_text_fmt(s_label, "%d/%d", s_level, volume::MAX_LEVEL);
     lv_obj_set_style_text_color(s_label, s_muted ? lv_color_make(0x60, 0x60, 0x60) : lv_color_white(), 0);
 }
 

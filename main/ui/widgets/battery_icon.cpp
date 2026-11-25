@@ -20,12 +20,21 @@ static constexpr int BATTERY_HYSTERESIS = 3;
 
 static const char *TAG = "battery_icon";
 static lv_obj_t *s_fill = nullptr;
+static lv_obj_t *s_label = nullptr;
 // 表示中の残量（-1 は取得できていない、-2 は未表示）。LVGL のタスクの中だけで読み書きする
 static int s_percent = -2;
 
 /** @brief 中身の長さと色を、残量（%、不正なら負）に合わせる。残量が少ないときは赤にする */
 static void apply(int percent)
 {
+    const lv_color_t color = percent >= 0 && percent <= LOW_PERCENT ? lv_color_make(0xff, 0x40, 0x40) : lv_color_white();
+    if (percent < 0) {
+        lv_label_set_text(s_label, "--%");
+    } else {
+        lv_label_set_text_fmt(s_label, "%d%%", percent);
+    }
+    lv_obj_set_style_text_color(s_label, color, 0);
+
     const int inner = W - 4;
     const int w = percent < 0 ? 0 : inner * percent / 100;
     // 幅 0 の箱は LVGL が扱いにくいので、非表示にする
@@ -35,7 +44,6 @@ static void apply(int percent)
     }
     lv_obj_remove_flag(s_fill, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_width(s_fill, w);
-    const lv_color_t color = percent <= LOW_PERCENT ? lv_color_make(0xff, 0x40, 0x40) : lv_color_white();
     lv_obj_set_style_bg_color(s_fill, color, 0);
 }
 
@@ -70,6 +78,10 @@ static void poll(lv_timer_t *)
 
 lv_obj_t *create(lv_obj_t *parent)
 {
+    // 残量の数字（電池の左）。親に先に作るので、並びは数字 → 電池になる
+    s_label = lv_label_create(parent);
+    lv_obj_set_style_text_font(s_label, &lv_font_montserrat_12, 0);
+
     // 枠 + 突起をまとめる入れ物
     lv_obj_t *box = lvgl_util::createBox(parent, W + 2, H);
 
