@@ -100,10 +100,10 @@ static void draw(lv_event_t *e)
     }
 }
 
-/** @brief 音量の数字（0〜16）を更新する。消音のときは数字を残して、スピーカーと同じ暗い灰色にする */
+/** @brief 音量の数字（n/16 の形）を更新する。消音のときは数字を残して、スピーカーと同じ暗い灰色にする */
 static void updateLabel()
 {
-    lv_label_set_text_fmt(s_label, "%d", s_level);
+    lv_label_set_text_fmt(s_label, "%d/%d", s_level, volume::MAX_LEVEL);
     lv_obj_set_style_text_color(s_label, s_muted ? lv_color_make(0x60, 0x60, 0x60) : lv_color_white(), 0);
 }
 
@@ -127,6 +127,8 @@ void create(lv_obj_t *parent, int height)
     // 音量の数字（スピーカーの左）
     s_label = lv_label_create(parent);
     lv_obj_set_style_text_font(s_label, &lv_font_montserrat_12, 0);
+    // 桁数が変わっても幅が変わらないよう、最も長い "16/16" が入る幅にして右寄せにする
+    lvgl_util::setFixedWidthRight(s_label, &lv_font_montserrat_12, "16/16");
     updateLabel();
 
     s_icon = lvgl_util::createBox(parent, ICON_W, height);
