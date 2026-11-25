@@ -24,7 +24,11 @@ static lv_obj_t *s_label = nullptr;
 // 表示中の残量（-1 は取得できていない、-2 は未表示）。LVGL のタスクの中だけで読み書きする
 static int s_percent = -2;
 
-/** @brief 中身の長さと色を、残量（%、不正なら負）に合わせる。残量が少ないときは赤にする */
+/**
+ * @brief 残量の数字、中身の長さ、色を、残量（%、不正なら負）に合わせる
+ *
+ * 数字は不正なら "--%"。残量が少ないときは、数字も中身も赤にする。
+ */
 static void apply(int percent)
 {
     const lv_color_t color = percent >= 0 && percent <= LOW_PERCENT ? lv_color_make(0xff, 0x40, 0x40) : lv_color_white();
@@ -81,6 +85,8 @@ lv_obj_t *create(lv_obj_t *parent)
     // 残量の数字（電池の左）。親に先に作るので、並びは数字 → 電池になる
     s_label = lv_label_create(parent);
     lv_obj_set_style_text_font(s_label, &lv_font_montserrat_12, 0);
+    // 桁数が変わっても幅が変わらないよう、最も長い "100%" が入る幅にして右寄せにする
+    lvgl_util::setFixedWidthRight(s_label, &lv_font_montserrat_12, "100%");
 
     // 枠 + 突起をまとめる入れ物
     lv_obj_t *box = lvgl_util::createBox(parent, W + 2, H);
